@@ -37,14 +37,16 @@ mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 
 ## Create the source tarball with --transform
 
-Run these commands from the repository root:
+Run these commands from the repository root. The final `.` is required; it is
+the directory that tar should add to the archive.
 
 ```bash
-commit="$(git rev-parse HEAD)"
+repo_root="$(pwd)"
+commit="$(git -C "${repo_root}" rev-parse HEAD)"
 shortcommit="${commit:0:7}"
-tarball="geoipsets-${shortcommit}.tar.gz"
+tarball="${HOME}/rpmbuild/SOURCES/geoipsets-${shortcommit}.tar.gz"
 
-tar \
+tar -C "${repo_root}" \
   --exclude=.git \
   --exclude=rpm/build \
   --transform "s,^\.,geoipsets-${commit}," \
@@ -63,10 +65,10 @@ That directory name must match the `%autosetup -n %{name}-%{commit}` line in
 
 ## Copy required RPM sources
 
-Copy the tarball and all additional `Source` files into `~/rpmbuild/SOURCES`:
+The tarball is already created in `~/rpmbuild/SOURCES`. Copy the additional
+`Source` files into `~/rpmbuild/SOURCES`:
 
 ```bash
-cp "geoipsets-${shortcommit}.tar.gz" ~/rpmbuild/SOURCES/
 cp rpm/geoipsets.conf ~/rpmbuild/SOURCES/
 cp rpm/update-geoipsets.service ~/rpmbuild/SOURCES/
 cp rpm/update-geoipsets.timer ~/rpmbuild/SOURCES/
