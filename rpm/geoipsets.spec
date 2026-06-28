@@ -50,7 +50,9 @@ install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets
 
 %check
 %pyproject_check_import
-%{py3_test_envvars} %{python3} -m pytest -v python/tests
+pushd python
+%{py3_test_envvars} %{python3} -m pytest
+popd
 
 %post
 %systemd_post update-geoipsets.service update-geoipsets.timer
