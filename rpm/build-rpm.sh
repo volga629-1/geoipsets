@@ -7,7 +7,7 @@ rpmbuild_dir="${RPM_TOPDIR:-${HOME}/rpmbuild}"
 source_dir="${rpmbuild_dir}/SOURCES"
 spec_dir="${rpmbuild_dir}/SPECS"
 
-commit="$(git -C "${repo_root}" rev-parse HEAD)"
+commit="$(awk '/^%global commit/ {print $3}' "${spec}")"
 shortcommit="${commit:0:7}"
 archive="${source_dir}/geoipsets-${shortcommit}.tar.gz"
 prefix="geoipsets-${commit}"

@@ -43,7 +43,7 @@ the directory that tar should add to the archive.
 ```bash
 repo_root="$(pwd)"
 sources_dir="${HOME}/rpmbuild/SOURCES"
-commit="$(git -C "${repo_root}" rev-parse HEAD)"
+commit="$(awk '/^%global commit/ {print $3}' "${repo_root}/rpm/geoipsets.spec")"
 shortcommit="${commit:0:7}"
 tarball="${sources_dir}/geoipsets-${shortcommit}.tar.gz"
 
