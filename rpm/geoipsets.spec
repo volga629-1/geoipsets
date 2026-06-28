@@ -67,7 +67,7 @@ popd
 
 %files -f %{pyproject_files}
 %license LICENSE
-%doc README.md python/README.md
+%doc python/README.md
 %config(noreplace) %{_sysconfdir}/geoipsets.conf
 %{_bindir}/geoipsets
 %{_unitdir}/update-geoipsets.service
