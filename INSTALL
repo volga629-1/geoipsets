@@ -99,8 +99,7 @@ Build outputs will be written below:
 
 ## One-command helper
 
-The helper script performs the same staging steps under `rpm/build/` inside the
-repository:
+The helper script performs the same staging steps under `~/rpmbuild` by default:
 
 ```bash
 ./rpm/build-rpm.sh
@@ -108,3 +107,9 @@ repository:
 
 It creates the tarball with `tar --transform`, copies the config, systemd, and
 tmpfiles sources, then runs `rpmbuild -ba`.
+
+To use a different RPM build root, set `RPM_TOPDIR`:
+
+```bash
+RPM_TOPDIR=/path/to/rpmbuild ./rpm/build-rpm.sh
+```
