@@ -12,7 +12,9 @@ shortcommit="${commit:0:7}"
 archive="${source_dir}/geoipsets-${shortcommit}.tar.gz"
 prefix="geoipsets-${commit}"
 
-mkdir -p "${source_dir}" "${rpmbuild_dir}"/{BUILD,BUILDROOT,RPMS,SPECS,SRPMS}
+if [[ ! -d "${rpmbuild_dir}"/BUILD ]]; then
+    mkdir -p "${source_dir}" "${rpmbuild_dir}"/{BUILD,BUILDROOT,RPMS,SPECS,SRPMS}
+fi
 
 tar -C "${repo_root}" \
   --exclude=.git \
