@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.1.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.2.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -80,5 +80,9 @@ popd
 %dir %{_sharedstatedir}/geoipsets
 
 %changelog
+* Sun Jun 28 2026 volga629-1 <volga629-1@users.noreply.github.com> - 2.4.0-0.2.20260506gitfdc367f
+- Add ipset refresh helper and run it after geoipsets updates.
+- Require ipset for runtime refresh support.
+
 * Wed May 06 2026 volga629-1 <volga629-1@users.noreply.github.com> - 2.4.0-0.1.20260506gitfdc367f
 - Initial Fedora-style RPM package for the geoipsets Git snapshot.
