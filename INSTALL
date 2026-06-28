@@ -76,6 +76,7 @@ install -pm 0644 rpm/geoipsets.conf "${sources_dir}/geoipsets.conf"
 install -pm 0644 rpm/update-geoipsets.service "${sources_dir}/update-geoipsets.service"
 install -pm 0644 rpm/update-geoipsets.timer "${sources_dir}/update-geoipsets.timer"
 install -pm 0644 rpm/geoipsets.tmpfiles "${sources_dir}/geoipsets.tmpfiles"
+install -pm 0755 rpm/geoipsets-refresh-ipset "${sources_dir}/geoipsets-refresh-ipset"
 ```
 
 Copy the spec into `~/rpmbuild/SPECS`:

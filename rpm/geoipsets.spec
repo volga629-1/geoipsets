@@ -14,12 +14,14 @@ Source1:        geoipsets.conf
 Source2:        update-geoipsets.service
 Source3:        update-geoipsets.timer
 Source4:        geoipsets.tmpfiles
+Source5:        geoipsets-refresh-ipset
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
 BuildRequires:  python3dist(pytest)
 BuildRequires:  systemd-rpm-macros
 
+Requires:       ipset
 Requires:       systemd
 
 %description
@@ -46,6 +48,7 @@ install -Dpm 0644 %{SOURCE1} %{buildroot}%{_sysconfdir}/geoipsets.conf
 install -Dpm 0644 %{SOURCE2} %{buildroot}%{_unitdir}/update-geoipsets.service
 install -Dpm 0644 %{SOURCE3} %{buildroot}%{_unitdir}/update-geoipsets.timer
 install -Dpm 0644 %{SOURCE4} %{buildroot}%{_tmpfilesdir}/geoipsets.conf
+install -Dpm 0755 %{SOURCE5} %{buildroot}%{_libexecdir}/geoipsets/refresh-ipset
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets
 
 %check
@@ -70,6 +73,7 @@ popd
 %doc python/README.md
 %config(noreplace) %{_sysconfdir}/geoipsets.conf
 %{_bindir}/geoipsets
+%{_libexecdir}/geoipsets/refresh-ipset
 %{_unitdir}/update-geoipsets.service
 %{_unitdir}/update-geoipsets.timer
 %{_tmpfilesdir}/geoipsets.conf

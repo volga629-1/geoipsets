@@ -8,10 +8,11 @@ AssertFileIsExecutable=/usr/bin/geoipsets
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/geoipsets --config-file /etc/geoipsets.conf
+ExecStartPost=/usr/libexec/geoipsets/refresh-ipset
 StandardOutput=journal
 StandardError=journal
 
-CapabilityBoundingSet=
+CapabilityBoundingSet=CAP_NET_ADMIN
 LockPersonality=true
 MemoryDenyWriteExecute=true
 NoNewPrivileges=true
@@ -27,13 +28,9 @@ ProtectKernelTunables=true
 ProtectProc=invisible
 ProtectSystem=strict
 ReadWritePaths=/var/lib/geoipsets
-RestrictAddressFamilies=AF_INET AF_INET6
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK
 RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
-
-# If a local override reloads firewall state after generation, it may need:
-# CapabilityBoundingSet=CAP_NET_ADMIN
-# RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK

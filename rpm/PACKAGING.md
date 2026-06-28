@@ -26,12 +26,17 @@ snapshot globals, and switch `Release` to `1%{?dist}`.
 - `/etc/geoipsets.conf`: default configuration, installed as `%config(noreplace)`
 - `/usr/lib/systemd/system/update-geoipsets.service`: hardened one-shot updater
 - `/usr/lib/systemd/system/update-geoipsets.timer`: weekly refresh timer
+- `/usr/libexec/geoipsets/refresh-ipset`: reloads generated ipset files
 - `/usr/lib/tmpfiles.d/geoipsets.conf`: creates `/var/lib/geoipsets`
 - `/var/lib/geoipsets`: generated provider output tree
 
 The packaged default uses DB-IP, nftables output, and both IPv4 and IPv6. MaxMind
 is supported by the application but requires users to add credentials in
 `/etc/geoipsets.conf`.
+
+After generating files, `update-geoipsets.service` runs the ipset refresh helper.
+The helper flushes any existing generated sets and restores updated entries from
+`/var/lib/geoipsets/dbip/ipset`.
 
 `output-dir` is the parent directory used by the application. The Python code
 appends `geoipsets/` internally, so the packaged `output-dir=/var/lib` writes

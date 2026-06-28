@@ -26,6 +26,7 @@ install -pm 0644 "${repo_root}/rpm/geoipsets.conf" "${source_dir}/geoipsets.conf
 install -pm 0644 "${repo_root}/rpm/update-geoipsets.service" "${source_dir}/update-geoipsets.service"
 install -pm 0644 "${repo_root}/rpm/update-geoipsets.timer" "${source_dir}/update-geoipsets.timer"
 install -pm 0644 "${repo_root}/rpm/geoipsets.tmpfiles" "${source_dir}/geoipsets.tmpfiles"
+install -pm 0755 "${repo_root}/rpm/geoipsets-refresh-ipset" "${source_dir}/geoipsets-refresh-ipset"
 install -pm 0644 "${spec}" "${spec_dir}/geoipsets.spec"
 
 rpmbuild -ba "${spec_dir}/geoipsets.spec" \

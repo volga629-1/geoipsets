@@ -1,0 +1,28 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+provider="${1:-dbip}"
+base_dir="/var/lib/geoipsets/${provider}/ipset"
+
+if [[ ! -d "${base_dir}" ]]; then
+    echo "No ipset data directory found: ${base_dir}" >&2
+    exit 0
+fi
+
+shopt -s nullglob
+files=("${base_dir}"/ipv4/*.ipv4 "${base_dir}"/ipv6/*.ipv6)
+
+if (( ${#files[@]} == 0 )); then
+    echo "No ipset files found under ${base_dir}" >&2
+    exit 0
+fi
+
+for file in "${files[@]}"; do
+    set_name="$(basename "${file}")"
+
+    if ipset list -name "${set_name}" >/dev/null 2>&1; then
+        ipset flush "${set_name}"
+    fi
+
+    ipset restore -exist -file "${file}"
+done
