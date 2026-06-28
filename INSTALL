@@ -42,9 +42,12 @@ the directory that tar should add to the archive.
 
 ```bash
 repo_root="$(pwd)"
+sources_dir="${HOME}/rpmbuild/SOURCES"
 commit="$(git -C "${repo_root}" rev-parse HEAD)"
 shortcommit="${commit:0:7}"
-tarball="${HOME}/rpmbuild/SOURCES/geoipsets-${shortcommit}.tar.gz"
+tarball="${sources_dir}/geoipsets-${shortcommit}.tar.gz"
+
+mkdir -p "${sources_dir}"
 
 tar -C "${repo_root}" \
   --exclude=.git \
@@ -65,14 +68,14 @@ That directory name must match the `%autosetup -n %{name}-%{commit}` line in
 
 ## Copy required RPM sources
 
-The tarball is already created in `~/rpmbuild/SOURCES`. Copy the additional
-`Source` files into `~/rpmbuild/SOURCES`:
+The tarball is already created directly in `~/rpmbuild/SOURCES`. Put the
+additional `Source` files there too:
 
 ```bash
-cp rpm/geoipsets.conf ~/rpmbuild/SOURCES/
-cp rpm/update-geoipsets.service ~/rpmbuild/SOURCES/
-cp rpm/update-geoipsets.timer ~/rpmbuild/SOURCES/
-cp rpm/geoipsets.tmpfiles ~/rpmbuild/SOURCES/
+install -pm 0644 rpm/geoipsets.conf "${sources_dir}/geoipsets.conf"
+install -pm 0644 rpm/update-geoipsets.service "${sources_dir}/update-geoipsets.service"
+install -pm 0644 rpm/update-geoipsets.timer "${sources_dir}/update-geoipsets.timer"
+install -pm 0644 rpm/geoipsets.tmpfiles "${sources_dir}/geoipsets.tmpfiles"
 ```
 
 Copy the spec into `~/rpmbuild/SPECS`:
