@@ -52,19 +52,23 @@ for file in "${files[@]}"; do
         set_name="${family}_${country}"
         source_pattern="${source_name//./\\.}"
 
-        if ipset list -name "${set_name}" >/dev/null 2>&1; then
+        if ipset list "${set_name}" >/dev/null 2>&1; then
             ipset flush "${set_name}"
+            sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" \
+                | sed -E '/^create[[:space:]]/d' \
+                | ipset restore -exist
+        else
+            sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" \
+                | ipset restore -exist
         fi
-
-        sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" \
-            | ipset restore -exist
     else
         set_name="${source_name}"
 
-        if ipset list -name "${set_name}" >/dev/null 2>&1; then
+        if ipset list "${set_name}" >/dev/null 2>&1; then
             ipset flush "${set_name}"
+            sed -E '/^create[[:space:]]/d' "${file}" | ipset restore -exist
+        else
+            ipset restore -exist -file "${file}"
         fi
-
-        ipset restore -exist -file "${file}"
     fi
 done
