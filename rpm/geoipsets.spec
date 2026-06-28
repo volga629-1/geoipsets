@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.2.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.3.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -80,6 +80,9 @@ popd
 %dir %{_sharedstatedir}/geoipsets
 
 %changelog
+* Sun Jun 28 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.3.20260506gitfdc367f
+- Restore ipset entries with Shorewall-compatible ipv4_CC and ipv6_CC names.
+
 * Sun Jun 28 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.2.20260506gitfdc367f
 - Add ipset refresh helper and run it after geoipsets updates.
 - Require ipset for runtime refresh support.

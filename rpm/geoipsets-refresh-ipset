@@ -18,11 +18,16 @@ if (( ${#files[@]} == 0 )); then
 fi
 
 for file in "${files[@]}"; do
-    set_name="$(basename "${file}")"
+    source_name="$(basename "${file}")"
+    country="${source_name%%.*}"
+    family="${source_name##*.}"
+    set_name="${family}_${country}"
+    source_pattern="${source_name//./\\.}"
 
     if ipset list -name "${set_name}" >/dev/null 2>&1; then
         ipset flush "${set_name}"
     fi
 
-    ipset restore -exist -file "${file}"
+    sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" \
+        | ipset restore -exist
 done

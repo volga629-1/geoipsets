@@ -36,7 +36,8 @@ is supported by the application but requires users to add credentials in
 
 After generating files, `update-geoipsets.service` runs the ipset refresh helper.
 The helper flushes any existing generated sets and restores updated entries from
-`/var/lib/geoipsets/dbip/ipset`.
+`/var/lib/geoipsets/dbip/ipset` using Shorewall-style set names such as
+`ipv4_CA` and `ipv6_CA`.
 
 `output-dir` is the parent directory used by the application. The Python code
 appends `geoipsets/` internally, so the packaged `output-dir=/var/lib` writes
