@@ -33,6 +33,10 @@ The packaged default uses DB-IP, nftables output, and both IPv4 and IPv6. MaxMin
 is supported by the application but requires users to add credentials in
 `/etc/geoipsets.conf`.
 
+`output-dir` is the parent directory used by the application. The Python code
+appends `geoipsets/` internally, so the packaged `output-dir=/var/lib` writes
+generated files under `/var/lib/geoipsets`.
+
 ## Build locally
 
 Install the Fedora RPM build tools:
