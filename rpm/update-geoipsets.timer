@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly geoipsets refresh
+
+[Timer]
+OnCalendar=Tue *-*-* 22:00:00
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target

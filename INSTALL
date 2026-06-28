@@ -1,0 +1,105 @@
+# RPM build install notes
+
+These instructions create a source tarball in the layout expected by
+`rpm/geoipsets.spec`, copy all RPM source files into the RPM `SOURCES`
+directory, and build the RPM.
+
+The spec currently packages this Git snapshot:
+
+```text
+commit: fdc367fade27b946f7694423f61add42359e031b
+version: 2.4.0
+release: 0.1.20260506gitfdc367f
+```
+
+If you build from a different commit, update the `commit`, `shortcommit`, and
+`snapdate` macros at the top of `rpm/geoipsets.spec`.
+
+## Install build tools
+
+On Fedora:
+
+```bash
+sudo dnf install rpm-build rpmdevtools python3-devel pyproject-rpm-macros systemd-rpm-macros
+```
+
+## Prepare rpmbuild directories
+
+```bash
+rpmdev-setuptree
+```
+
+If `rpmdev-setuptree` is not available, create the directories manually:
+
+```bash
+mkdir -p ~/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+```
+
+## Create the source tarball with --transform
+
+Run these commands from the repository root:
+
+```bash
+commit="$(git rev-parse HEAD)"
+shortcommit="${commit:0:7}"
+tarball="geoipsets-${shortcommit}.tar.gz"
+
+tar \
+  --exclude=.git \
+  --exclude=rpm/build \
+  --transform "s,^\.,geoipsets-${commit}," \
+  -czf "${tarball}" .
+```
+
+The `--transform` option puts every file under the top-level directory expected
+by the spec:
+
+```text
+geoipsets-fdc367fade27b946f7694423f61add42359e031b/
+```
+
+That directory name must match the `%autosetup -n %{name}-%{commit}` line in
+`rpm/geoipsets.spec`.
+
+## Copy required RPM sources
+
+Copy the tarball and all additional `Source` files into `~/rpmbuild/SOURCES`:
+
+```bash
+cp "geoipsets-${shortcommit}.tar.gz" ~/rpmbuild/SOURCES/
+cp rpm/geoipsets.conf ~/rpmbuild/SOURCES/
+cp rpm/update-geoipsets.service ~/rpmbuild/SOURCES/
+cp rpm/update-geoipsets.timer ~/rpmbuild/SOURCES/
+cp rpm/geoipsets.tmpfiles ~/rpmbuild/SOURCES/
+```
+
+Copy the spec into `~/rpmbuild/SPECS`:
+
+```bash
+cp rpm/geoipsets.spec ~/rpmbuild/SPECS/
+```
+
+## Build the RPM
+
+```bash
+rpmbuild -ba ~/rpmbuild/SPECS/geoipsets.spec
+```
+
+Build outputs will be written below:
+
+```text
+~/rpmbuild/RPMS/
+~/rpmbuild/SRPMS/
+```
+
+## One-command helper
+
+The helper script performs the same staging steps under `rpm/build/` inside the
+repository:
+
+```bash
+./rpm/build-rpm.sh
+```
+
+It creates the tarball with `tar --transform`, copies the config, systemd, and
+tmpfiles sources, then runs `rpmbuild -ba`.
