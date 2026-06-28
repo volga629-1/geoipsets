@@ -48,34 +48,25 @@ set_supports_comment() {
     ipset list "${set_name}" | grep -qw 'comment'
 }
 
-restore_existing_native_set() {
-    local set_name="$1"
-    local file="$2"
-    ipset flush "${set_name}"
-
-    if set_supports_comment "${set_name}"; then
-        sed -E '/^create[[:space:]]/d' "${file}" | ipset restore -exist
-    else
-        sed -E '/^create[[:space:]]/d; s/[[:space:]]+comment[[:space:]][^[:space:]]+$//' "${file}" \
-            | ipset restore -exist
-    fi
-}
-
-restore_existing_legacy_set() {
+restore_existing_set() {
     local set_name="$1"
     local file="$2"
     local source_pattern="$3"
-    ipset flush "${set_name}"
+    local temp_set="${set_name}_tmp_$$"
+
+    ipset destroy "${temp_set}" >/dev/null 2>&1 || true
 
     if set_supports_comment "${set_name}"; then
-        sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" \
-            | sed -E '/^create[[:space:]]/d' \
+        sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${temp_set}\\3/" "${file}" \
             | ipset restore -exist
     else
-        sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" \
-            | sed -E '/^create[[:space:]]/d; s/[[:space:]]+comment[[:space:]][^[:space:]]+$//' \
+        sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${temp_set}\\3/" "${file}" \
+            | sed -E 's/[[:space:]]+comment([[:space:]][^[:space:]]+)?$//' \
             | ipset restore -exist
     fi
+
+    ipset swap "${temp_set}" "${set_name}"
+    ipset destroy "${temp_set}"
 }
 
 for file in "${files[@]}"; do
@@ -88,16 +79,17 @@ for file in "${files[@]}"; do
         source_pattern="${source_name//./\\.}"
 
         if ipset list "${set_name}" >/dev/null 2>&1; then
-            restore_existing_legacy_set "${set_name}" "${file}" "${source_pattern}"
+            restore_existing_set "${set_name}" "${file}" "${source_pattern}"
         else
             sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" \
                 | ipset restore -exist
         fi
     else
         set_name="${source_name}"
+        source_pattern="${source_name//./\\.}"
 
         if ipset list "${set_name}" >/dev/null 2>&1; then
-            restore_existing_native_set "${set_name}" "${file}"
+            restore_existing_set "${set_name}" "${file}" "${source_pattern}"
         else
             ipset restore -exist -file "${file}"
         fi
