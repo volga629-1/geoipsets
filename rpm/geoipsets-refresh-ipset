@@ -1,7 +1,33 @@
 #!/usr/bin/bash
 set -euo pipefail
 
-provider="${1:-dbip}"
+legacy=false
+provider="dbip"
+
+while (( $# > 0 )); do
+    case "$1" in
+        --legacy)
+            legacy=true
+            ;;
+        --provider)
+            if (( $# < 2 )); then
+                echo "ERROR: --provider requires a value" >&2
+                exit 2
+            fi
+            provider="$2"
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: ${0##*/} [--legacy] [--provider PROVIDER]" >&2
+            exit 0
+            ;;
+        *)
+            provider="$1"
+            ;;
+    esac
+    shift
+done
+
 base_dir="/var/lib/geoipsets/${provider}/ipset"
 
 if [[ ! -d "${base_dir}" ]]; then
@@ -19,15 +45,26 @@ fi
 
 for file in "${files[@]}"; do
     source_name="$(basename "${file}")"
-    country="${source_name%%.*}"
-    family="${source_name##*.}"
-    set_name="${family}_${country}"
-    source_pattern="${source_name//./\\.}"
 
-    if ipset list -name "${set_name}" >/dev/null 2>&1; then
-        ipset flush "${set_name}"
+    if [[ "${legacy}" == true ]]; then
+        country="${source_name%%.*}"
+        family="${source_name##*.}"
+        set_name="${family}_${country}"
+        source_pattern="${source_name//./\\.}"
+
+        if ipset list -name "${set_name}" >/dev/null 2>&1; then
+            ipset flush "${set_name}"
+        fi
+
+        sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" \
+            | ipset restore -exist
+    else
+        set_name="${source_name}"
+
+        if ipset list -name "${set_name}" >/dev/null 2>&1; then
+            ipset flush "${set_name}"
+        fi
+
+        ipset restore -exist -file "${file}"
     fi
-
-    sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" \
-        | ipset restore -exist
 done

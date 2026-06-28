@@ -36,8 +36,11 @@ is supported by the application but requires users to add credentials in
 
 After generating files, `update-geoipsets.service` runs the ipset refresh helper.
 The helper flushes any existing generated sets and restores updated entries from
-`/var/lib/geoipsets/dbip/ipset` using Shorewall-style set names such as
-`ipv4_CA` and `ipv6_CA`.
+`/var/lib/geoipsets/dbip/ipset` using native set names such as `CA.ipv4` and
+`CA.ipv6`. For older Shorewall configurations that expect names such as
+`ipv4_CA` and `ipv6_CA`, run `/usr/libexec/geoipsets/refresh-ipset --legacy`.
+To make the timer use legacy names, add a systemd drop-in that clears and
+replaces `ExecStartPost` with the same command plus `--legacy`.
 
 `output-dir` is the parent directory used by the application. The Python code
 appends `geoipsets/` internally, so the packaged `output-dir=/var/lib` writes
