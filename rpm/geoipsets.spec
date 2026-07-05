@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.10.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.11.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -105,6 +105,9 @@ popd
 %dir %{_sharedstatedir}/geoipsets/blocklists/feeds
 
 %changelog
+* Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.11.20260506gitfdc367f
+- Reset IFB mirror filters on geoipsets-ifbctl start and add restart command.
+
 * Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.10.20260506gitfdc367f
 - Add optional geoipsets-ifbctl helper for SIP IFB mirroring.
 

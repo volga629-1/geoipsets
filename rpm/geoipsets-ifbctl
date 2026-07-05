@@ -8,6 +8,7 @@ wan_if_override="${WAN_IF:-}"
 usage() {
     cat >&2 <<EOF
 Usage: ${0##*/} start|stop|status
+       ${0##*/} restart
 
 Environment:
   WAN_IF       Space-separated ingress interface list. If unset, auto-detect
@@ -92,12 +93,11 @@ replace_filter() {
         action mirred egress mirror dev "${mirror_if}"
 }
 
-delete_filter() {
+reset_interface_filters() {
     local iface="$1"
-    local protocol="$2"
-    local preference="$3"
 
-    tc filter del dev "${iface}" ingress protocol "${protocol}" pref "${preference}" 2>/dev/null || true
+    tc qdisc del dev "${iface}" clsact 2>/dev/null || true
+    tc qdisc add dev "${iface}" clsact
 }
 
 start_mirror() {
@@ -117,7 +117,7 @@ start_mirror() {
             continue
         fi
 
-        tc qdisc add dev "${iface}" clsact 2>/dev/null || true
+        reset_interface_filters "${iface}"
 
         for port in ${ports}; do
             replace_filter "${iface}" ip "$((100 + port))" udp "${port}"
@@ -130,18 +130,11 @@ start_mirror() {
 
 stop_mirror() {
     local iface
-    local port
 
-    validate_ports
     get_interfaces
 
     for iface in "${interfaces[@]}"; do
-        for port in ${ports}; do
-            delete_filter "${iface}" ip "$((100 + port))"
-            delete_filter "${iface}" ip "$((200 + port))"
-            delete_filter "${iface}" ipv6 "$((300 + port))"
-            delete_filter "${iface}" ipv6 "$((400 + port))"
-        done
+        tc qdisc del dev "${iface}" clsact 2>/dev/null || true
     done
 
     ip link del "${mirror_if}" 2>/dev/null || true
@@ -175,6 +168,10 @@ case "${command}" in
         ;;
     stop)
         stop_mirror
+        ;;
+    restart)
+        stop_mirror
+        start_mirror
         ;;
     status)
         show_status

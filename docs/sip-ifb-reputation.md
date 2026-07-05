@@ -44,6 +44,7 @@ When using the RPM package, `geoipsets-ifbctl` provides the IFB setup helper:
 geoipsets-ifbctl start
 geoipsets-ifbctl status
 geoipsets-ifbctl stop
+geoipsets-ifbctl restart
 ```
 
 By default it mirrors SIP ports `5060 5061 5084` to `ifb-sip0` and auto-detects
@@ -53,6 +54,9 @@ variables:
 ```bash
 WAN_IF="ens3" MIRROR_IF=ifb-sip0 SIP_PORTS="5060 5061 5084" geoipsets-ifbctl start
 ```
+
+`start` resets the managed `clsact` qdisc before installing mirror filters, so
+Shorewall restarts and port-list changes do not leave stale filters behind.
 
 Optional for a local cache:
 
