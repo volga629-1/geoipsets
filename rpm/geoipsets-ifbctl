@@ -155,8 +155,12 @@ show_status() {
 
     for iface in "${interfaces[@]}"; do
         echo
+        echo "tc qdisc on ${iface}:"
+        tc qdisc show dev "${iface}" 2>/dev/null || true
+
+        echo
         echo "tc filters on ${iface}:"
-        tc filter show dev "${iface}" ingress 2>/dev/null || true
+        tc -s filter show dev "${iface}" ingress 2>/dev/null || true
     done
 }
 

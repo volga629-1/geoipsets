@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.13.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.14.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -111,6 +111,9 @@ fi
 %dir %{_sharedstatedir}/geoipsets/blocklists/feeds
 
 %changelog
+* Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.14.20260506gitfdc367f
+- Show qdisc and packet counters in geoipsets-ifbctl status.
+
 * Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.13.20260506gitfdc367f
 - Continue refreshing abuse blocklists when the country database download fails.
 - Notify operators when updated feed defaults are installed as rpmnew.
