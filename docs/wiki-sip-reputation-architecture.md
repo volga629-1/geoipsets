@@ -281,18 +281,45 @@ Dynamic feeds are configured in:
 /etc/geoipsets.blocklist-feeds.conf
 ```
 
-Example:
+The foomuri-style source catalog can look like this:
 
 ```text
 iplist {
-    @abuseipdb https://raw.githubusercontent.com/borestad/blocklist-abuseipdb/main/abuseipdb-s100-14d.ipv4
-    @et https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt
-    @spamhausdropv6 https://www.spamhaus.org/drop/dropv6.txt
+        @ipv4_CA  https://raw.githubusercontent.com/ipverse/rir-ip/master/country/ca/ipv4-aggregated.txt
+        @ipv4_US  https://raw.githubusercontent.com/ipverse/rir-ip/master/country/us/ipv4-aggregated.txt
+        @blocklist_de https://lists.blocklist.de/lists/all.txt
+        @techmdw https://blacklist.techmdw.com/
+        @greensnow https://blocklist.greensnow.co/greensnow.txt
+        @et https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt
+        @interserver https://rbldata.interserver.net/ip.txt
+        @stopforumspam https://www.stopforumspam.com/downloads/toxic_ip_cidr.txt
+        @spamhausdrop https://cascadiacrow.com/spamhausblocks.txt
+        @spamhausdropv6 https://www.spamhaus.org/drop/dropv6.txt
+        @blocklist_net_ua https://iplists.firehol.org/files/blocklist_net_ua.ipset
+        @abuseipdb https://raw.githubusercontent.com/borestad/blocklist-abuseipdb/main/abuseipdb-s100-14d.ipv4
 }
 ```
 
-Only add block feeds here. Do not add country allowlists such as `@ipv4_CA` or
-`@ipv4_US`, because fetched entries are loaded into the block sets.
+For `geoipsets.blocklist-feeds.conf`, enable only feeds that should be loaded
+into `blocked_ipv4` and `blocked_ipv6`. Do not enable `@ipv4_CA` or `@ipv4_US`
+in this file because those are country/policy inputs, not abuse block feeds.
+
+Recommended block-feed config:
+
+```text
+iplist {
+    @blocklist_de https://lists.blocklist.de/lists/all.txt
+    @techmdw https://blacklist.techmdw.com/
+    @greensnow https://blocklist.greensnow.co/greensnow.txt
+    @et https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt
+    @interserver https://rbldata.interserver.net/ip.txt
+    @stopforumspam https://www.stopforumspam.com/downloads/toxic_ip_cidr.txt
+    @spamhausdrop https://cascadiacrow.com/spamhausblocks.txt
+    @spamhausdropv6 https://www.spamhaus.org/drop/dropv6.txt
+    @blocklist_net_ua https://iplists.firehol.org/files/blocklist_net_ua.ipset
+    @abuseipdb https://raw.githubusercontent.com/borestad/blocklist-abuseipdb/main/abuseipdb-s100-14d.ipv4
+}
+```
 
 Fetch and apply:
 
