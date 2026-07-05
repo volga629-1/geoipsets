@@ -12,6 +12,9 @@ alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP INVITE w
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP SDP private or CGNAT media address"; content:"INVITE sip:"; nocase; pcre:"/\nc=IN IP4 (10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.64\.)/i"; classtype:attempted-recon; sid:9002021; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP SDP private or CGNAT media address"; flow:stateless; content:"INVITE sip:"; nocase; pcre:"/\nc=IN IP4 (10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.64\.)/i"; classtype:attempted-recon; sid:9002022; rev:1;)
 
+alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP INVITE reputation check"; content:"INVITE sip:"; nocase; threshold:type both, track by_src, seconds 300, count 1; classtype:attempted-recon; sid:9002071; rev:1;)
+alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP INVITE reputation check"; flow:stateless; content:"INVITE sip:"; nocase; threshold:type both, track by_src, seconds 300, count 1; classtype:attempted-recon; sid:9002072; rev:1;)
+
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP OPTIONS probe to numeric extension"; content:"OPTIONS sip:"; nocase; pcre:"/^OPTIONS\s+sip:[0-9]{2,8}@/Ri"; threshold:type both, track by_src, seconds 300, count 2; classtype:attempted-recon; sid:9002051; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP OPTIONS probe to numeric extension"; flow:stateless; content:"OPTIONS sip:"; nocase; pcre:"/^OPTIONS\s+sip:[0-9]{2,8}@/Ri"; threshold:type both, track by_src, seconds 300, count 2; classtype:attempted-recon; sid:9002052; rev:1;)
 

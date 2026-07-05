@@ -312,6 +312,11 @@ classtype:trojan-activity
 Treat `emerging-deleted.rules` as log-only while testing. It can include rules
 removed upstream for age or quality reasons.
 
+The local rules intentionally include a generic inbound INVITE reputation-check
+alert. That alert is a trigger for API lookup only; it does not mean the source
+is blocked. The worker blocks only after IPQS or AbuseIPDB confirms proxy, VPN,
+Tor, recent abuse, or a high score.
+
 If `tc -s filter show dev WAN ingress` shows mirrored packets but Suricata or
 `tcpdump` sees nothing, switch the helper to the dummy backend:
 
@@ -477,6 +482,9 @@ if repeated SIP abuse events are seen within 10 minutes:
   query reputation
 
 if high-confidence SIP rule is seen:
+  query reputation immediately
+
+if generic inbound SIP INVITE is seen:
   query reputation immediately
 ```
 

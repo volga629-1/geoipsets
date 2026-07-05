@@ -187,6 +187,9 @@ The RPM ships local SIP reputation signal rules here:
 /usr/share/geoipsets/suricata/local-sip.rules
 ```
 
+The local rules include a generic inbound INVITE reputation-check alert. That
+alert triggers API lookup only; IPQS or AbuseIPDB still makes the block decision.
+
 ## Blocklist Sources
 
 Manual local blocklist:

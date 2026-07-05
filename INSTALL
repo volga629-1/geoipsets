@@ -9,7 +9,7 @@ The spec currently packages this Git snapshot:
 ```text
 commit: fdc367fade27b946f7694423f61add42359e031b
 version: 2.4.0
-release: 0.20.20260506gitfdc367f
+release: 0.21.20260506gitfdc367f
 ```
 
 If you build from a different commit, update the `commit`, `shortcommit`, and
