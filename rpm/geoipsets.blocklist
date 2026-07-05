@@ -6,6 +6,9 @@
 #   blocked_ipv4
 #   blocked_ipv6
 #
+# Additional local files can be placed in /etc/geoipsets.blocklist.d/*.list.
+# Dynamic fetched feeds are stored under /var/lib/geoipsets/blocklists/feeds/.
+#
 # Examples:
 # 45.146.55.104
 # 203.0.113.0/24

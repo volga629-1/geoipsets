@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.8.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.9.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -17,6 +17,8 @@ Source4:        geoipsets.tmpfiles
 Source5:        geoipsets-refresh-ipset
 Source6:        geoipsets.blocklist
 Source7:        geoipsets-refresh-blocklist
+Source8:        geoipsets.blocklist-feeds.conf
+Source9:        geoipsets-fetch-blocklists
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
@@ -24,6 +26,7 @@ BuildRequires:  python3dist(pytest)
 BuildRequires:  systemd-rpm-macros
 
 Requires:       ipset
+Requires:       curl
 Requires:       systemd
 
 %description
@@ -53,7 +56,12 @@ install -Dpm 0644 %{SOURCE4} %{buildroot}%{_tmpfilesdir}/geoipsets.conf
 install -Dpm 0755 %{SOURCE5} %{buildroot}%{_libexecdir}/geoipsets/refresh-ipset
 install -Dpm 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/geoipsets.blocklist
 install -Dpm 0755 %{SOURCE7} %{buildroot}%{_libexecdir}/geoipsets/refresh-blocklist
+install -Dpm 0644 %{SOURCE8} %{buildroot}%{_sysconfdir}/geoipsets.blocklist-feeds.conf
+install -Dpm 0755 %{SOURCE9} %{buildroot}%{_libexecdir}/geoipsets/fetch-blocklists
+install -dpm 0755 %{buildroot}%{_sysconfdir}/geoipsets.blocklist.d
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets
+install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets/blocklists
+install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets/blocklists/feeds
 
 %check
 %pyproject_check_import
@@ -77,15 +85,23 @@ popd
 %doc python/README.md
 %config(noreplace) %{_sysconfdir}/geoipsets.conf
 %config(noreplace) %{_sysconfdir}/geoipsets.blocklist
+%config(noreplace) %{_sysconfdir}/geoipsets.blocklist-feeds.conf
+%dir %{_sysconfdir}/geoipsets.blocklist.d
 %{_bindir}/geoipsets
 %{_libexecdir}/geoipsets/refresh-ipset
 %{_libexecdir}/geoipsets/refresh-blocklist
+%{_libexecdir}/geoipsets/fetch-blocklists
 %{_unitdir}/update-geoipsets.service
 %{_unitdir}/update-geoipsets.timer
 %{_tmpfilesdir}/geoipsets.conf
 %dir %{_sharedstatedir}/geoipsets
+%dir %{_sharedstatedir}/geoipsets/blocklists
+%dir %{_sharedstatedir}/geoipsets/blocklists/feeds
 
 %changelog
+* Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.9.20260506gitfdc367f
+- Add dynamic abuse blocklist feed fetching and loading.
+
 * Sat Jul 04 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.8.20260506gitfdc367f
 - Add manual public proxy/VPN abuse blocklist ipsets.
 

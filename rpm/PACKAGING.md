@@ -18,7 +18,7 @@ fork has no release tags. The spec therefore packages the current Git commit as
 a snapshot release:
 
 ```text
-2.4.0-0.8.20260506gitfdc367f
+2.4.0-0.9.20260506gitfdc367f
 ```
 
 When an upstream release tag exists, update `Source0`, remove the commit
@@ -28,10 +28,13 @@ snapshot globals, and switch `Release` to `1%{?dist}`.
 
 - `/etc/geoipsets.conf`: default configuration, installed as `%config(noreplace)`
 - `/etc/geoipsets.blocklist`: manual public proxy/VPN/abuse endpoint blocklist
+- `/etc/geoipsets.blocklist-feeds.conf`: dynamic abuse blocklist feed config
+- `/etc/geoipsets.blocklist.d`: local blocklist drop-in directory
 - `/usr/lib/systemd/system/update-geoipsets.service`: hardened one-shot updater
 - `/usr/lib/systemd/system/update-geoipsets.timer`: weekly refresh timer
 - `/usr/libexec/geoipsets/refresh-ipset`: reloads generated ipset files
-- `/usr/libexec/geoipsets/refresh-blocklist`: reloads manual blocklist ipsets
+- `/usr/libexec/geoipsets/fetch-blocklists`: downloads dynamic blocklist feeds
+- `/usr/libexec/geoipsets/refresh-blocklist`: reloads manual and dynamic blocklist ipsets
 - `/usr/lib/tmpfiles.d/geoipsets.conf`: creates `/var/lib/geoipsets`
 - `/var/lib/geoipsets`: generated provider output tree
 
@@ -48,9 +51,12 @@ To make the timer use legacy names, add a systemd drop-in that clears and
 replaces `ExecStartPost` with the same command plus `--legacy`.
 
 Manual proxy, VPN, and abuse endpoints can be added to `/etc/geoipsets.blocklist`
-with one IP address or CIDR network per line. Comments with `#` are allowed.
-The refresh helper creates or updates `blocked_ipv4` and `blocked_ipv6` with a
-temporary-set swap, so rules can reference those sets while entries are updated.
+or `/etc/geoipsets.blocklist.d/*.list` with one IP address or CIDR network per
+line. Comments with `#` are allowed. Dynamic feeds are downloaded into
+`/var/lib/geoipsets/blocklists/feeds/*.list`. Learned local lists can live under
+`/var/lib/geoipsets/blocklists/*.list`. The refresh helper creates or updates
+`blocked_ipv4` and `blocked_ipv6` with a temporary-set swap, so rules can
+reference those sets while entries are updated.
 For example:
 
 ```text
@@ -59,6 +65,20 @@ For example:
 2001:db8:bad::/48
 ```
 
+Dynamic abuse feeds are configured in `/etc/geoipsets.blocklist-feeds.conf`
+using foomuri-style `iplist` entries:
+
+```text
+iplist {
+    @abuseipdb https://raw.githubusercontent.com/borestad/blocklist-abuseipdb/main/abuseipdb-s100-14d.ipv4
+    @et https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt
+    @spamhausdropv6 https://www.spamhaus.org/drop/dropv6.txt
+}
+```
+
+Only put block feeds in this file. Country allowlists such as `@ipv4_CA` and
+`@ipv4_US` belong in geo policy sets, not in the blocklist feed config.
+
 If you override the service for legacy Shorewall country set names, keep the
 blocklist refresh in the override too:
 
@@ -66,6 +86,7 @@ blocklist refresh in the override too:
 [Service]
 ExecStartPost=
 ExecStartPost=/usr/libexec/geoipsets/refresh-ipset --legacy
+ExecStartPost=/usr/libexec/geoipsets/fetch-blocklists
 ExecStartPost=/usr/libexec/geoipsets/refresh-blocklist
 ```
 

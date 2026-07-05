@@ -29,6 +29,8 @@ install -pm 0644 "${repo_root}/rpm/geoipsets.tmpfiles" "${source_dir}/geoipsets.
 install -pm 0755 "${repo_root}/rpm/geoipsets-refresh-ipset" "${source_dir}/geoipsets-refresh-ipset"
 install -pm 0644 "${repo_root}/rpm/geoipsets.blocklist" "${source_dir}/geoipsets.blocklist"
 install -pm 0755 "${repo_root}/rpm/geoipsets-refresh-blocklist" "${source_dir}/geoipsets-refresh-blocklist"
+install -pm 0644 "${repo_root}/rpm/geoipsets.blocklist-feeds.conf" "${source_dir}/geoipsets.blocklist-feeds.conf"
+install -pm 0755 "${repo_root}/rpm/geoipsets-fetch-blocklists" "${source_dir}/geoipsets-fetch-blocklists"
 install -pm 0644 "${spec}" "${spec_dir}/geoipsets.spec"
 
 rpmbuild -ba "${spec_dir}/geoipsets.spec" \

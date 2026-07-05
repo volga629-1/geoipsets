@@ -1,1 +1,3 @@
 d /var/lib/geoipsets 0755 root root -
+d /var/lib/geoipsets/blocklists 0755 root root -
+d /var/lib/geoipsets/blocklists/feeds 0755 root root -

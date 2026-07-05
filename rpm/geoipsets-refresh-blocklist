@@ -2,6 +2,8 @@
 set -euo pipefail
 
 blocklist_file="/etc/geoipsets.blocklist"
+blocklist_files=("${blocklist_file}")
+blocklist_dirs=("/etc/geoipsets.blocklist.d" "/var/lib/geoipsets/blocklists" "/var/lib/geoipsets/blocklists/feeds")
 ipv4_set="blocked_ipv4"
 ipv6_set="blocked_ipv6"
 maxelem=131072
@@ -13,7 +15,16 @@ while (( $# > 0 )); do
                 echo "ERROR: --file requires a value" >&2
                 exit 2
             fi
-            blocklist_file="$2"
+            blocklist_files=("$2")
+            blocklist_dirs=()
+            shift
+            ;;
+        --directory)
+            if (( $# < 2 )); then
+                echo "ERROR: --directory requires a value" >&2
+                exit 2
+            fi
+            blocklist_dirs+=("$2")
             shift
             ;;
         --ipv4-set)
@@ -41,7 +52,7 @@ while (( $# > 0 )); do
             shift
             ;;
         --help|-h)
-            echo "Usage: ${0##*/} [--file PATH] [--ipv4-set NAME] [--ipv6-set NAME] [--maxelem COUNT]" >&2
+            echo "Usage: ${0##*/} [--file PATH] [--directory DIR] [--ipv4-set NAME] [--ipv6-set NAME] [--maxelem COUNT]" >&2
             exit 0
             ;;
         *)
@@ -65,29 +76,49 @@ cleanup() {
 }
 trap cleanup EXIT
 
-{
-    printf 'create %s hash:net family inet maxelem %s\n' "${ipv4_set}" "${maxelem}"
-} > "${tmp_ipv4}"
+printf 'create %s hash:net family inet maxelem %s\n' "${ipv4_set}" "${maxelem}" > "${tmp_ipv4}"
+printf 'create %s hash:net family inet6 maxelem %s\n' "${ipv6_set}" "${maxelem}" > "${tmp_ipv6}"
 
-{
-    printf 'create %s hash:net family inet6 maxelem %s\n' "${ipv6_set}" "${maxelem}"
-} > "${tmp_ipv6}"
+add_entry() {
+    local entry="$1"
 
-if [[ -f "${blocklist_file}" ]]; then
+    if [[ "${entry}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$ ]]; then
+        printf 'add %s %s\n' "${ipv4_set}" "${entry}" >> "${tmp_ipv4}"
+    elif [[ "${entry}" =~ ^[0-9A-Fa-f:]*:[0-9A-Fa-f:]+(/[0-9]{1,3})?$ ]]; then
+        printf 'add %s %s\n' "${ipv6_set}" "${entry}" >> "${tmp_ipv6}"
+    else
+        echo "WARNING: ignored invalid blocklist entry: ${entry}" >&2
+    fi
+}
+
+read_blocklist_file() {
+    local file="$1"
+    local line
+    local entry
+
+    [[ -f "${file}" ]] || return 0
+
     while IFS= read -r line || [[ -n "${line}" ]]; do
         entry="${line%%#*}"
+        entry="${entry%%;*}"
         entry="${entry#"${entry%%[![:space:]]*}"}"
         entry="${entry%"${entry##*[![:space:]]}"}"
 
         [[ -z "${entry}" ]] && continue
+        add_entry "${entry}"
+    done < "${file}"
+}
 
-        if [[ "${entry}" == *:* ]]; then
-            printf 'add %s %s\n' "${ipv6_set}" "${entry}" >> "${tmp_ipv6}"
-        else
-            printf 'add %s %s\n' "${ipv4_set}" "${entry}" >> "${tmp_ipv4}"
-        fi
-    done < "${blocklist_file}"
-fi
+for file in "${blocklist_files[@]}"; do
+    read_blocklist_file "${file}"
+done
+
+shopt -s nullglob
+for directory in "${blocklist_dirs[@]}"; do
+    for file in "${directory}"/*.list; do
+        read_blocklist_file "${file}"
+    done
+done
 
 refresh_set() {
     local set_name="$1"
