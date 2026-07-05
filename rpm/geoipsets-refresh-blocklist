@@ -6,7 +6,7 @@ blocklist_files=("${blocklist_file}")
 blocklist_dirs=("/etc/geoipsets.blocklist.d" "/var/lib/geoipsets/blocklists" "/var/lib/geoipsets/blocklists/feeds")
 ipv4_set="blocked_ipv4"
 ipv6_set="blocked_ipv6"
-maxelem=131072
+maxelem=1048576
 
 while (( $# > 0 )); do
     case "$1" in
@@ -52,7 +52,7 @@ while (( $# > 0 )); do
             shift
             ;;
         --help|-h)
-            echo "Usage: ${0##*/} [--file PATH] [--directory DIR] [--ipv4-set NAME] [--ipv6-set NAME] [--maxelem COUNT]" >&2
+            echo "Usage: ${0##*/} [--file PATH] [--directory DIR] [--ipv4-set NAME] [--ipv6-set NAME] [--maxelem MINIMUM]" >&2
             exit 0
             ;;
         *)
@@ -70,22 +70,24 @@ fi
 
 tmp_ipv4="$(mktemp)"
 tmp_ipv6="$(mktemp)"
+tmp_ipv4_body="$(mktemp)"
+tmp_ipv6_body="$(mktemp)"
 
 cleanup() {
-    rm -f "${tmp_ipv4}" "${tmp_ipv6}"
+    rm -f "${tmp_ipv4}" "${tmp_ipv6}" "${tmp_ipv4_body}" "${tmp_ipv6_body}"
 }
 trap cleanup EXIT
 
-printf 'create %s hash:net family inet maxelem %s\n' "${ipv4_set}" "${maxelem}" > "${tmp_ipv4}"
-printf 'create %s hash:net family inet6 maxelem %s\n' "${ipv6_set}" "${maxelem}" > "${tmp_ipv6}"
+: > "${tmp_ipv4_body}"
+: > "${tmp_ipv6_body}"
 
 add_entry() {
     local entry="$1"
 
     if [[ "${entry}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$ ]]; then
-        printf 'add %s %s\n' "${ipv4_set}" "${entry}" >> "${tmp_ipv4}"
+        printf 'add %s %s\n' "${ipv4_set}" "${entry}" >> "${tmp_ipv4_body}"
     elif [[ "${entry}" =~ ^[0-9A-Fa-f:]*:[0-9A-Fa-f:]+(/[0-9]{1,3})?$ ]]; then
-        printf 'add %s %s\n' "${ipv6_set}" "${entry}" >> "${tmp_ipv6}"
+        printf 'add %s %s\n' "${ipv6_set}" "${entry}" >> "${tmp_ipv6_body}"
     else
         echo "WARNING: ignored invalid blocklist entry: ${entry}" >&2
     fi
@@ -119,6 +121,47 @@ for directory in "${blocklist_dirs[@]}"; do
         read_blocklist_file "${file}"
     done
 done
+
+count_entries() {
+    local file="$1"
+    local count
+
+    count="$(wc -l < "${file}")"
+    printf '%s' "${count//[[:space:]]/}"
+}
+
+calculate_maxelem() {
+    local entry_count="$1"
+    local minimum="$2"
+    local autosized
+
+    autosized=$((entry_count + ((entry_count + 3) / 4)))
+
+    if (( autosized < minimum )); then
+        printf '%s' "${minimum}"
+    else
+        printf '%s' "${autosized}"
+    fi
+}
+
+write_restore_file() {
+    local set_name="$1"
+    local family="$2"
+    local body_file="$3"
+    local restore_file="$4"
+    local entry_count
+    local set_maxelem
+
+    entry_count="$(count_entries "${body_file}")"
+    set_maxelem="$(calculate_maxelem "${entry_count}" "${maxelem}")"
+
+    printf 'create %s hash:net family %s maxelem %s\n' "${set_name}" "${family}" "${set_maxelem}" > "${restore_file}"
+    cat "${body_file}" >> "${restore_file}"
+    echo "Prepared ${set_name}: entries=${entry_count} maxelem=${set_maxelem}"
+}
+
+write_restore_file "${ipv4_set}" inet "${tmp_ipv4_body}" "${tmp_ipv4}"
+write_restore_file "${ipv6_set}" inet6 "${tmp_ipv6_body}" "${tmp_ipv6}"
 
 refresh_set() {
     local set_name="$1"

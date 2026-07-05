@@ -18,7 +18,7 @@ fork has no release tags. The spec therefore packages the current Git commit as
 a snapshot release:
 
 ```text
-2.4.0-0.14.20260506gitfdc367f
+2.4.0-0.15.20260506gitfdc367f
 ```
 
 When an upstream release tag exists, update `Source0`, remove the commit
@@ -67,7 +67,9 @@ line. Comments with `#` are allowed. Dynamic feeds are downloaded into
 `/var/lib/geoipsets/blocklists/feeds/*.list`. Learned local lists can live under
 `/var/lib/geoipsets/blocklists/*.list`. The refresh helper creates or updates
 `blocked_ipv4` and `blocked_ipv6` with a temporary-set swap, so rules can
-reference those sets while entries are updated.
+reference those sets while entries are updated. Blocklist ipsets use a default
+minimum `maxelem` of `1048576` and auto-size upward with 25% headroom when the
+loaded entry count exceeds that minimum.
 For example:
 
 ```text
@@ -100,6 +102,19 @@ Only put block feeds in this file. Country allowlists such as `@ipv4_CA` and
 Because the feed config is installed as `%config(noreplace)`, RPM may install
 updated defaults as `/etc/geoipsets.blocklist-feeds.conf.rpmnew`. Merge or
 replace the existing file if you want the new default feeds enabled.
+
+If very large feeds need a larger minimum ipset size, add a systemd drop-in:
+
+```ini
+[Service]
+Environment=BLOCKLIST_MAXELEM=2097152
+```
+
+For a one-time manual refresh:
+
+```bash
+sudo /usr/libexec/geoipsets/refresh-blocklist --maxelem 2097152
+```
 
 `output-dir` is the parent directory used by the application. The Python code
 appends `geoipsets/` internally, so the packaged `output-dir=/var/lib` writes

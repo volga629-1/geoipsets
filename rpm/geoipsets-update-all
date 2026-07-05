@@ -3,11 +3,16 @@ set -uo pipefail
 
 config_file="${GEOIPSETS_CONFIG:-/etc/geoipsets.conf}"
 refresh_ipset_args=()
+refresh_blocklist_args=()
 
 if [[ -n "${REFRESH_IPSET_ARGS:-}" ]]; then
     # Intended for simple service overrides, for example:
     # REFRESH_IPSET_ARGS=--legacy
     read -r -a refresh_ipset_args <<< "${REFRESH_IPSET_ARGS}"
+fi
+
+if [[ -n "${BLOCKLIST_MAXELEM:-}" ]]; then
+    refresh_blocklist_args=(--maxelem "${BLOCKLIST_MAXELEM}")
 fi
 
 geo_status=0
@@ -22,7 +27,7 @@ else
 fi
 
 /usr/libexec/geoipsets/fetch-blocklists || feed_status=$?
-/usr/libexec/geoipsets/refresh-blocklist || block_status=$?
+/usr/libexec/geoipsets/refresh-blocklist "${refresh_blocklist_args[@]}" || block_status=$?
 
 if (( geo_status != 0 )); then
     exit "${geo_status}"

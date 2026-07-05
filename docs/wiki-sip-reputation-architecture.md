@@ -328,6 +328,10 @@ sudo /usr/libexec/geoipsets/fetch-blocklists
 sudo /usr/libexec/geoipsets/refresh-blocklist
 ```
 
+`refresh-blocklist` auto-sizes `blocked_ipv4` and `blocked_ipv6` from the number
+of loaded entries. The default minimum `maxelem` is `1048576`; if feeds grow
+larger, the helper adds 25% headroom above the loaded entry count.
+
 ## Systemd Refresh
 
 The packaged update service runs:
@@ -354,6 +358,19 @@ If legacy Shorewall country set names are needed:
 ```ini
 [Service]
 Environment=REFRESH_IPSET_ARGS=--legacy
+```
+
+If very large public feeds need a higher minimum blocklist ipset size:
+
+```ini
+[Service]
+Environment=BLOCKLIST_MAXELEM=2097152
+```
+
+Manual one-time refresh with a larger minimum:
+
+```bash
+sudo /usr/libexec/geoipsets/refresh-blocklist --maxelem 2097152
 ```
 
 After RPM upgrades, check whether RPM kept a new feed catalog as:
