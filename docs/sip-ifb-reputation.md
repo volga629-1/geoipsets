@@ -57,6 +57,33 @@ sudo ip link add "${mirror_if}" type ifb 2>/dev/null || true
 sudo ip link set "${mirror_if}" up
 ```
 
+## NetworkManager and nmcli
+
+On systems managed by NetworkManager, check whether the installed
+NetworkManager build exposes an IFB connection type:
+
+```bash
+nmcli connection add type help | grep -w ifb
+```
+
+If `ifb` is listed, NetworkManager can create the mirror interface:
+
+```bash
+sudo modprobe ifb
+sudo nmcli connection add type ifb ifname ifb-sip0 con-name ifb-sip0 \
+  ipv4.method disabled \
+  ipv6.method disabled
+sudo nmcli connection modify ifb-sip0 connection.autoconnect yes
+sudo nmcli connection up ifb-sip0
+```
+
+If `ifb` is not listed, create the interface with `ip link` or the systemd
+helper below. NetworkManager can still coexist with that interface, but it
+cannot create an unsupported kernel link type through `nmcli`.
+
+`nmcli` only handles the interface lifecycle. The `tc` mirror filters still need
+to be applied separately after boot and after relevant network changes.
+
 Use `clsact` so only ingress filters are added to the WAN interface. This
 mirrors packets to `ifb-sip0`; it does not redirect or delay the original packet.
 
@@ -111,7 +138,8 @@ sudo ip link del "${mirror_if}" 2>/dev/null || true
 ## Make the Mirror Persistent
 
 `tc` rules are runtime state. Reapply them after boot or after network changes.
-One simple approach is a oneshot systemd service.
+Even when `nmcli` creates `ifb-sip0`, a separate hook is still needed for the
+`tc` filters. One simple approach is a oneshot systemd service.
 
 Create `/usr/local/sbin/geoipsets-ifb-mirror`:
 
@@ -174,6 +202,34 @@ Enable it:
 sudo chmod 0755 /usr/local/sbin/geoipsets-ifb-mirror
 sudo systemctl daemon-reload
 sudo systemctl enable --now geoipsets-ifb-mirror.service
+```
+
+If NetworkManager events are preferred, run the same helper from a dispatcher
+script after the WAN connection comes up. Create
+`/etc/NetworkManager/dispatcher.d/90-geoipsets-ifb-mirror`:
+
+```bash
+#!/usr/bin/bash
+set -euo pipefail
+
+wan_if="eth0"
+mirror_if="ifb-sip0"
+ports="5060 5061 5084"
+
+event_if="$1"
+event_state="$2"
+
+[[ "${event_if}" == "${wan_if}" ]] || exit 0
+[[ "${event_state}" == "up" || "${event_state}" == "dhcp4-change" || "${event_state}" == "dhcp6-change" ]] || exit 0
+
+WAN_IF="${wan_if}" MIRROR_IF="${mirror_if}" SIP_PORTS="${ports}" /usr/local/sbin/geoipsets-ifb-mirror
+```
+
+Enable the dispatcher script:
+
+```bash
+sudo chmod 0755 /etc/NetworkManager/dispatcher.d/90-geoipsets-ifb-mirror
+sudo systemctl reload NetworkManager
 ```
 
 ## Suricata Input
