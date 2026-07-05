@@ -1,0 +1,40 @@
+[Unit]
+Description=Promote suspicious SIP sources to geoipsets blocklists
+Documentation=file:/usr/share/doc/geoipsets/sip-ifb-reputation.md
+Wants=network-online.target
+After=network-online.target suricata.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/geoipsets-reputation.env
+ExecStart=/usr/libexec/geoipsets/reputation-worker
+Restart=on-failure
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+
+CapabilityBoundingSet=CAP_NET_ADMIN
+LockPersonality=true
+MemoryDenyWriteExecute=true
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+ProtectSystem=strict
+ReadOnlyPaths=/var/log/suricata
+ReadWritePaths=/var/lib/geoipsets
+RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target

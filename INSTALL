@@ -9,7 +9,7 @@ The spec currently packages this Git snapshot:
 ```text
 commit: fdc367fade27b946f7694423f61add42359e031b
 version: 2.4.0
-release: 0.18.20260506gitfdc367f
+release: 0.19.20260506gitfdc367f
 ```
 
 If you build from a different commit, update the `commit`, `shortcommit`, and
@@ -83,6 +83,10 @@ install -pm 0644 rpm/geoipsets.blocklist-feeds.conf "${sources_dir}/geoipsets.bl
 install -pm 0755 rpm/geoipsets-fetch-blocklists "${sources_dir}/geoipsets-fetch-blocklists"
 install -pm 0755 rpm/geoipsets-ifbctl "${sources_dir}/geoipsets-ifbctl"
 install -pm 0755 rpm/geoipsets-update-all "${sources_dir}/geoipsets-update-all"
+install -pm 0640 rpm/geoipsets-reputation.env "${sources_dir}/geoipsets-reputation.env"
+install -pm 0755 rpm/geoipsets-reputation-worker "${sources_dir}/geoipsets-reputation-worker"
+install -pm 0644 rpm/geoipsets-reputation-worker.service "${sources_dir}/geoipsets-reputation-worker.service"
+install -pm 0644 rpm/geoipsets-local-sip.rules "${sources_dir}/geoipsets-local-sip.rules"
 ```
 
 Copy the spec into `~/rpmbuild/SPECS`:

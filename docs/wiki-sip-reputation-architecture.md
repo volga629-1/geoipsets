@@ -26,7 +26,7 @@ flowchart TD
 
     A -. "tc mirred copy" .-> F["ifb-sip0 mirror interface"]
     F --> G["Suricata IDS"]
-    G --> H["EVE JSON alerts"]
+    G --> H["EVE JSON alerts/events"]
     H --> I["Reputation worker"]
     I --> J{"Local cache hit?"}
     J -->|"clean/recent"| K["Log checked IP"]
@@ -48,7 +48,7 @@ flowchart TD
 | Suricata | Watches mirrored SIP traffic and writes alerts to `eve.json`. |
 | `fetch-blocklists` | Downloads configured public abuse feeds into `/var/lib/geoipsets/blocklists/feeds`. |
 | `refresh-blocklist` | Loads manual, dynamic, and learned lists into `blocked_ipv4` and `blocked_ipv6`. |
-| Reputation worker | Future/optional worker that reads Suricata alerts, checks IP reputation APIs, and promotes bad IPs to ipset. |
+| `reputation-worker` | Optional local worker that reads Suricata EVE, checks IPQS/AbuseIPDB, and promotes bad IPs to ipset. |
 
 ## Packet Path
 
@@ -69,7 +69,7 @@ sequenceDiagram
         Shorewall->>Shorewall: Continue SIP policy
         Shorewall-->>IFB: Mirror copy via tc mirred
         IFB->>Suricata: Passive packet inspection
-        Suricata->>Worker: EVE alert
+        Suricata->>Worker: EVE alert or SIP event
         Worker->>Worker: Cache/API decision
         alt Bad reputation
             Worker->>Ipset: Add source IP
@@ -174,11 +174,18 @@ emerging-exploit.rules
 emerging-malware.rules
 emerging-worm.rules
 tor.rules
+local-sip.rules
 classtype: trojan-activity
 ```
 
 Treat `emerging-deleted.rules` carefully. It is better as log-only unless a
 specific SID has been reviewed and approved for blocking.
+
+The RPM ships local SIP reputation signal rules here:
+
+```text
+/usr/share/geoipsets/suricata/local-sip.rules
+```
 
 ## Blocklist Sources
 
@@ -270,12 +277,19 @@ Then run:
 sudo /usr/libexec/geoipsets/refresh-blocklist
 ```
 
-Suggested worker enforcement after a positive reputation result:
+The packaged local worker performs live enforcement after a positive reputation
+result:
 
 ```bash
 sudo ipset add blocked_ipv4 45.146.55.104 -exist
-sudo conntrack -D -s 45.146.55.104 2>/dev/null || true
+sudo conntrack -D -f ipv4 -s 45.146.55.104 2>/dev/null || true
 printf '%s\n' 45.146.55.104 | sudo tee -a /var/lib/geoipsets/blocklists/learned.list
+```
+
+The worker also keeps a local SQLite cache:
+
+```text
+/var/lib/geoipsets/reputation/reputation.sqlite
 ```
 
 ## Dynamic Public Feeds
@@ -404,16 +418,44 @@ sudo /usr/libexec/geoipsets/refresh-blocklist
 
 The reputation worker is intentionally outside the packet path.
 
+The RPM installs the local stage-1 worker:
+
+```text
+/usr/libexec/geoipsets/reputation-worker
+/usr/lib/systemd/system/geoipsets-reputation-worker.service
+/etc/geoipsets-reputation.env
+/usr/share/geoipsets/suricata/local-sip.rules
+```
+
+Configure local API keys in `/etc/geoipsets-reputation.env`:
+
+```bash
+IPQS_API_KEY=replace-with-ipqualityscore-key
+ABUSEIPDB_API_KEY=replace-with-abuseipdb-key
+```
+
+Enable it:
+
+```bash
+systemctl enable --now geoipsets-reputation-worker.service
+journalctl -u geoipsets-reputation-worker.service -f
+```
+
+The worker supports IPQualityScore for proxy, VPN, Tor, recent abuse, bot, and
+fraud score signals. It supports AbuseIPDB for abuse confidence score and Tor
+signals.
+
 Recommended decision order:
 
 ```text
 1. Suricata alert fires.
-2. Worker extracts source IP from EVE JSON.
-3. Worker skips private, reserved, and allowlisted IPs.
-4. Worker checks local cache.
-5. Worker calls reputation API only for unknown/stale IPs.
-6. If bad, worker adds IP to live ipset, deletes conntrack state, and persists it.
-7. If clean, worker caches/logs the checked result.
+2. SIP parser event repeats enough times to cross the local threshold.
+3. Worker extracts source IP from EVE JSON.
+4. Worker skips private, reserved, and allowlisted IPs.
+5. Worker checks local cache.
+6. Worker calls IPQS and/or AbuseIPDB only for unknown/stale IPs.
+7. If bad, worker adds IP to live ipset, deletes conntrack state, and persists it.
+8. If clean, worker caches/logs the checked result.
 ```
 
 Suggested block policy:

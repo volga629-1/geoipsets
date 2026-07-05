@@ -18,7 +18,7 @@ fork has no release tags. The spec therefore packages the current Git commit as
 a snapshot release:
 
 ```text
-2.4.0-0.18.20260506gitfdc367f
+2.4.0-0.19.20260506gitfdc367f
 ```
 
 When an upstream release tag exists, update `Source0`, remove the commit
@@ -36,7 +36,11 @@ snapshot globals, and switch `Release` to `1%{?dist}`.
 - `/usr/libexec/geoipsets/fetch-blocklists`: downloads dynamic blocklist feeds
 - `/usr/libexec/geoipsets/refresh-blocklist`: reloads manual and dynamic blocklist ipsets
 - `/usr/libexec/geoipsets/update-all`: runs the full refresh sequence for systemd
+- `/usr/libexec/geoipsets/reputation-worker`: reads Suricata EVE and promotes bad SIP sources
 - `/usr/sbin/geoipsets-ifbctl`: optional SIP mirror helper for Suricata
+- `/etc/geoipsets-reputation.env`: local reputation API and policy configuration
+- `/usr/lib/systemd/system/geoipsets-reputation-worker.service`: optional local reputation worker
+- `/usr/share/geoipsets/suricata/local-sip.rules`: local SIP rules for reputation signals
 - `/usr/lib/tmpfiles.d/geoipsets.conf`: creates `/var/lib/geoipsets`
 - `/var/lib/geoipsets`: generated provider output tree
 
@@ -136,6 +140,34 @@ device is specifically required. Example Shorewall hook:
 ```bash
 WAN_IF="ens18" MIRROR_TYPE=dummy SIP_PORTS="5060 5061 5084 5086 5087 5088" /usr/sbin/geoipsets-ifbctl start
 ```
+
+The optional `geoipsets-reputation-worker.service` tails Suricata EVE JSON,
+checks suspicious SIP sources with local API keys, and promotes confirmed bad
+addresses into `blocked_ipv4` or `blocked_ipv6`. It also deletes active
+conntrack state and appends confirmed blocks to
+`/var/lib/geoipsets/blocklists/learned.list` so they survive refreshes.
+
+Configure local API keys in `/etc/geoipsets-reputation.env`:
+
+```bash
+IPQS_API_KEY=replace-with-ipqualityscore-key
+ABUSEIPDB_API_KEY=replace-with-abuseipdb-key
+```
+
+Then enable the worker:
+
+```bash
+sudo systemctl enable --now geoipsets-reputation-worker.service
+```
+
+The package also ships local Suricata rules under:
+
+```text
+/usr/share/geoipsets/suricata/local-sip.rules
+```
+
+Copy or include that file as `local-sip.rules` in the Suricata rules directory,
+then add it to the local rule manager group list.
 
 ## Build locally
 

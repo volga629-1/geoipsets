@@ -1,0 +1,557 @@
+#!/usr/bin/python3
+"""Local Suricata EVE reputation worker for geoipsets."""
+
+from __future__ import annotations
+
+import argparse
+import ipaddress
+import json
+import os
+import re
+import shlex
+import signal
+import sqlite3
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+
+RUNNING = True
+
+
+def log(message: str) -> None:
+    print(message, flush=True)
+
+
+def warn(message: str) -> None:
+    print(f"WARNING: {message}", file=sys.stderr, flush=True)
+
+
+def handle_signal(signum: int, _frame: Any) -> None:
+    global RUNNING
+    RUNNING = False
+    log(f"received signal {signum}; stopping")
+
+
+@dataclass(frozen=True)
+class Config:
+    eve_file: Path
+    state_db: Path
+    learned_list: Path
+    allow_list: Path
+    block_ipv4_set: str
+    block_ipv6_set: str
+    sip_ports: set[int]
+    check_alerts: bool
+    check_sip_events: bool
+    sip_event_methods: set[str]
+    sip_event_min_count: int
+    sip_event_window: int
+    cache_clean_ttl: int
+    cache_block_ttl: int
+    api_timeout: int
+    dry_run: bool
+    ipqs_api_key: str
+    ipqs_strictness: int
+    ipqs_fraud_threshold: int
+    ipqs_block_proxy: bool
+    ipqs_block_vpn: bool
+    ipqs_block_tor: bool
+    ipqs_block_recent_abuse: bool
+    ipqs_block_bot: bool
+    abuseipdb_api_key: str
+    abuseipdb_max_age_days: int
+    abuseipdb_confidence_threshold: int
+
+
+def get_bool(name: str, default: str = "0") -> bool:
+    return os.environ.get(name, default).strip().lower() in {"1", "yes", "true", "on"}
+
+
+def get_int(name: str, default: int) -> int:
+    value = os.environ.get(name, str(default)).strip()
+    try:
+        return int(value)
+    except ValueError:
+        warn(f"{name}={value!r} is not an integer; using {default}")
+        return default
+
+
+def get_words(name: str, default: str) -> list[str]:
+    value = os.environ.get(name, default)
+    try:
+        return shlex.split(value)
+    except ValueError:
+        return value.split()
+
+
+def load_config() -> Config:
+    ports: set[int] = set()
+    for port in get_words("SIP_PORTS", "5060 5061 5084 5086 5087 5088"):
+        try:
+            parsed = int(port)
+        except ValueError:
+            warn(f"ignored invalid SIP port {port!r}")
+            continue
+        if 1 <= parsed <= 65535:
+            ports.add(parsed)
+
+    return Config(
+        eve_file=Path(os.environ.get("EVE_FILE", "/var/log/suricata/eve.json")),
+        state_db=Path(os.environ.get("STATE_DB", "/var/lib/geoipsets/reputation/reputation.sqlite")),
+        learned_list=Path(os.environ.get("LEARNED_LIST", "/var/lib/geoipsets/blocklists/learned.list")),
+        allow_list=Path(os.environ.get("ALLOW_LIST", "/var/lib/geoipsets/blocklists/allow.list")),
+        block_ipv4_set=os.environ.get("BLOCK_IPV4_SET", "blocked_ipv4"),
+        block_ipv6_set=os.environ.get("BLOCK_IPV6_SET", "blocked_ipv6"),
+        sip_ports=ports,
+        check_alerts=get_bool("CHECK_ALERTS", "1"),
+        check_sip_events=get_bool("CHECK_SIP_EVENTS", "1"),
+        sip_event_methods={word.upper() for word in get_words("SIP_EVENT_METHODS", "OPTIONS REGISTER INVITE")},
+        sip_event_min_count=max(1, get_int("SIP_EVENT_MIN_COUNT", 2)),
+        sip_event_window=max(1, get_int("SIP_EVENT_WINDOW", 300)),
+        cache_clean_ttl=max(0, get_int("CACHE_CLEAN_TTL", 86400)),
+        cache_block_ttl=max(0, get_int("CACHE_BLOCK_TTL", 604800)),
+        api_timeout=max(1, get_int("API_TIMEOUT", 6)),
+        dry_run=get_bool("DRY_RUN", "0"),
+        ipqs_api_key=os.environ.get("IPQS_API_KEY", "").strip(),
+        ipqs_strictness=max(0, get_int("IPQS_STRICTNESS", 1)),
+        ipqs_fraud_threshold=max(0, get_int("IPQS_FRAUD_THRESHOLD", 85)),
+        ipqs_block_proxy=get_bool("IPQS_BLOCK_PROXY", "1"),
+        ipqs_block_vpn=get_bool("IPQS_BLOCK_VPN", "1"),
+        ipqs_block_tor=get_bool("IPQS_BLOCK_TOR", "1"),
+        ipqs_block_recent_abuse=get_bool("IPQS_BLOCK_RECENT_ABUSE", "1"),
+        ipqs_block_bot=get_bool("IPQS_BLOCK_BOT", "1"),
+        abuseipdb_api_key=os.environ.get("ABUSEIPDB_API_KEY", "").strip(),
+        abuseipdb_max_age_days=max(1, get_int("ABUSEIPDB_MAX_AGE_DAYS", 90)),
+        abuseipdb_confidence_threshold=max(0, get_int("ABUSEIPDB_CONFIDENCE_THRESHOLD", 90)),
+    )
+
+
+def init_db(path: Path) -> sqlite3.Connection:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS decisions (
+            ip TEXT PRIMARY KEY,
+            decision TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            score INTEGER NOT NULL DEFAULT 0,
+            reason TEXT NOT NULL,
+            checked_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            raw_json TEXT NOT NULL DEFAULT ''
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS events (
+            ip TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            first_seen INTEGER NOT NULL,
+            last_seen INTEGER NOT NULL,
+            count INTEGER NOT NULL,
+            PRIMARY KEY (ip, kind)
+        )
+        """
+    )
+    conn.commit()
+    return conn
+
+
+def load_allowlist(path: Path) -> list[ipaddress._BaseNetwork]:
+    networks: list[ipaddress._BaseNetwork] = []
+    if not path.exists():
+        return networks
+
+    for line_no, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(line, strict=False))
+        except ValueError as exc:
+            warn(f"ignored invalid allowlist entry {path}:{line_no}: {exc}")
+    return networks
+
+
+def is_allowed(ip: ipaddress._BaseAddress, allowlist: list[ipaddress._BaseNetwork]) -> bool:
+    return any(ip in network for network in allowlist)
+
+
+def extract_event(line: str) -> dict[str, Any] | None:
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(event, dict):
+        return None
+    return event
+
+
+def event_port(event: dict[str, Any]) -> int | None:
+    try:
+        return int(event.get("dest_port"))
+    except (TypeError, ValueError):
+        return None
+
+
+def is_relevant_event(event: dict[str, Any], cfg: Config) -> tuple[bool, str]:
+    if event_port(event) not in cfg.sip_ports:
+        return False, "port-not-sip"
+
+    event_type = str(event.get("event_type", "")).lower()
+    if event_type == "alert" and cfg.check_alerts:
+        alert = event.get("alert") if isinstance(event.get("alert"), dict) else {}
+        sid = alert.get("signature_id", "unknown")
+        return True, f"alert:{sid}"
+
+    if event_type == "sip" and cfg.check_sip_events:
+        sip = event.get("sip") if isinstance(event.get("sip"), dict) else {}
+        method = str(sip.get("method", "")).upper()
+        uri = str(sip.get("uri", ""))
+        if method not in cfg.sip_event_methods:
+            return False, f"sip-method-{method or 'unknown'}"
+        if method == "OPTIONS" and not re.search(r"^sip:[0-9]{2,8}@", uri, re.IGNORECASE):
+            return False, "sip-options-not-numeric-extension"
+        return True, f"sip:{method}"
+
+    return False, event_type or "unknown"
+
+
+def event_gate(conn: sqlite3.Connection, ip: str, kind: str, cfg: Config) -> bool:
+    if kind.startswith("alert:"):
+        return True
+
+    now = int(time.time())
+    row = conn.execute("SELECT first_seen, count FROM events WHERE ip = ? AND kind = ?", (ip, kind)).fetchone()
+    if row is None or now - int(row[0]) > cfg.sip_event_window:
+        conn.execute(
+            "INSERT OR REPLACE INTO events (ip, kind, first_seen, last_seen, count) VALUES (?, ?, ?, ?, ?)",
+            (ip, kind, now, now, 1),
+        )
+        conn.commit()
+        log(f"observed {kind} from {ip}: count=1/{cfg.sip_event_min_count}")
+        return cfg.sip_event_min_count <= 1
+
+    count = int(row[1]) + 1
+    conn.execute("UPDATE events SET last_seen = ?, count = ? WHERE ip = ? AND kind = ?", (now, count, ip, kind))
+    conn.commit()
+    log(f"observed {kind} from {ip}: count={count}/{cfg.sip_event_min_count}")
+    return count >= cfg.sip_event_min_count
+
+
+def cached_decision(conn: sqlite3.Connection, ip: str) -> dict[str, Any] | None:
+    now = int(time.time())
+    row = conn.execute(
+        "SELECT decision, provider, score, reason, expires_at FROM decisions WHERE ip = ?",
+        (ip,),
+    ).fetchone()
+    if row is None:
+        return None
+    if int(row[4]) <= now:
+        return None
+    return {
+        "decision": row[0],
+        "provider": row[1],
+        "score": int(row[2]),
+        "reason": row[3],
+        "expires_at": int(row[4]),
+    }
+
+
+def store_decision(
+    conn: sqlite3.Connection,
+    ip: str,
+    decision: str,
+    provider: str,
+    score: int,
+    reason: str,
+    ttl: int,
+    raw: dict[str, Any],
+) -> None:
+    now = int(time.time())
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO decisions
+            (ip, decision, provider, score, reason, checked_at, expires_at, raw_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (ip, decision, provider, score, reason, now, now + ttl, json.dumps(raw, sort_keys=True)),
+    )
+    conn.commit()
+
+
+def http_json(url: str, headers: dict[str, str], timeout: int) -> dict[str, Any]:
+    request = urllib.request.Request(url, headers=headers, method="GET")
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        body = response.read().decode("utf-8", errors="replace")
+    decoded = json.loads(body)
+    if not isinstance(decoded, dict):
+        raise ValueError("JSON response is not an object")
+    return decoded
+
+
+def check_ipqs(ip: str, cfg: Config) -> dict[str, Any] | None:
+    if not cfg.ipqs_api_key:
+        return None
+
+    query = urllib.parse.urlencode(
+        {
+            "strictness": cfg.ipqs_strictness,
+            "fast": "false",
+            "allow_public_access_points": "true",
+        }
+    )
+    url = f"https://ipqualityscore.com/api/json/ip/{urllib.parse.quote(cfg.ipqs_api_key)}/{urllib.parse.quote(ip)}?{query}"
+    data = http_json(url, {"Accept": "application/json", "User-Agent": "geoipsets-reputation-worker"}, cfg.api_timeout)
+
+    if data.get("success") is False:
+        message = str(data.get("message", "IPQS request failed"))
+        raise RuntimeError(message)
+
+    score = int(data.get("fraud_score") or 0)
+    reasons: list[str] = []
+    if cfg.ipqs_block_proxy and data.get("proxy") is True:
+        reasons.append("proxy")
+    if cfg.ipqs_block_vpn and (data.get("vpn") is True or data.get("active_vpn") is True):
+        reasons.append("vpn")
+    if cfg.ipqs_block_tor and (data.get("tor") is True or data.get("active_tor") is True):
+        reasons.append("tor")
+    if cfg.ipqs_block_recent_abuse and data.get("recent_abuse") is True:
+        reasons.append("recent_abuse")
+    if cfg.ipqs_block_bot and data.get("bot_status") is True:
+        reasons.append("bot")
+    if score >= cfg.ipqs_fraud_threshold:
+        reasons.append(f"fraud_score={score}")
+
+    return {
+        "provider": "ipqualityscore",
+        "decision": "block" if reasons else "clean",
+        "score": score,
+        "reason": ",".join(reasons) if reasons else f"fraud_score={score}",
+        "raw": data,
+    }
+
+
+def check_abuseipdb(ip: str, cfg: Config) -> dict[str, Any] | None:
+    if not cfg.abuseipdb_api_key:
+        return None
+
+    query = urllib.parse.urlencode({"ipAddress": ip, "maxAgeInDays": cfg.abuseipdb_max_age_days})
+    url = f"https://api.abuseipdb.com/api/v2/check?{query}"
+    data = http_json(
+        url,
+        {
+            "Accept": "application/json",
+            "Key": cfg.abuseipdb_api_key,
+            "User-Agent": "geoipsets-reputation-worker",
+        },
+        cfg.api_timeout,
+    )
+    details = data.get("data") if isinstance(data.get("data"), dict) else {}
+    score = int(details.get("abuseConfidenceScore") or 0)
+    reasons: list[str] = []
+    if details.get("isTor") is True:
+        reasons.append("tor")
+    if score >= cfg.abuseipdb_confidence_threshold:
+        reasons.append(f"abuse_confidence={score}")
+
+    return {
+        "provider": "abuseipdb",
+        "decision": "block" if reasons else "clean",
+        "score": score,
+        "reason": ",".join(reasons) if reasons else f"abuse_confidence={score}",
+        "raw": data,
+    }
+
+
+def reputation_check(ip: str, cfg: Config) -> dict[str, Any] | None:
+    checks = (check_ipqs, check_abuseipdb)
+    saw_provider = False
+    best_clean: dict[str, Any] | None = None
+    errors: list[str] = []
+
+    for check in checks:
+        try:
+            result = check(ip, cfg)
+        except (urllib.error.URLError, TimeoutError, OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"{check.__name__}: {exc}")
+            continue
+
+        if result is None:
+            continue
+
+        saw_provider = True
+        if result["decision"] == "block":
+            return result
+        if best_clean is None or int(result["score"]) > int(best_clean["score"]):
+            best_clean = result
+
+    if errors:
+        warn(f"reputation lookup errors for {ip}: {'; '.join(errors)}")
+    if best_clean is not None:
+        return best_clean
+    if not saw_provider:
+        warn("no reputation API keys configured; set IPQS_API_KEY and/or ABUSEIPDB_API_KEY")
+    return None
+
+
+def learned_contains(path: Path, ip: str) -> bool:
+    if not path.exists():
+        return False
+    needle = ip.strip()
+    with path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.split("#", 1)[0].strip()
+            if line == needle:
+                return True
+    return False
+
+
+def persist_learned(path: Path, ip: str, reason: str, dry_run: bool) -> None:
+    if learned_contains(path, ip):
+        return
+    if dry_run:
+        log(f"DRY_RUN: would append {ip} to {path}")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{ip} # {reason}\n")
+
+
+def run_command(command: list[str], dry_run: bool) -> None:
+    if dry_run:
+        log("DRY_RUN: would run " + " ".join(shlex.quote(part) for part in command))
+        return
+    subprocess.run(command, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def enforce(ip_obj: ipaddress._BaseAddress, decision: dict[str, Any], cfg: Config) -> None:
+    ip = str(ip_obj)
+    set_name = cfg.block_ipv4_set if ip_obj.version == 4 else cfg.block_ipv6_set
+    family = "ipv4" if ip_obj.version == 4 else "ipv6"
+    reason = f"{decision['provider']}:{decision['reason']}"
+    log(f"blocking {ip}: {reason}")
+    run_command(["ipset", "add", set_name, ip, "-exist"], cfg.dry_run)
+    run_command(["conntrack", "-D", "-f", family, "-s", ip], cfg.dry_run)
+    persist_learned(cfg.learned_list, ip, reason, cfg.dry_run)
+
+
+def process_event(event: dict[str, Any], conn: sqlite3.Connection, cfg: Config, allowlist: list[ipaddress._BaseNetwork]) -> None:
+    src_ip = event.get("src_ip")
+    if not isinstance(src_ip, str):
+        return
+    try:
+        ip_obj = ipaddress.ip_address(src_ip)
+    except ValueError:
+        return
+
+    if not ip_obj.is_global:
+        return
+    if is_allowed(ip_obj, allowlist):
+        log(f"skipping allowlisted source {src_ip}")
+        return
+
+    relevant, kind = is_relevant_event(event, cfg)
+    if not relevant:
+        return
+    if not event_gate(conn, src_ip, kind, cfg):
+        return
+
+    cached = cached_decision(conn, src_ip)
+    if cached is not None:
+        if cached["decision"] == "block":
+            log(f"cached block for {src_ip}: {cached['provider']}:{cached['reason']}")
+            enforce(ip_obj, cached, cfg)
+        else:
+            log(f"cached clean for {src_ip}: {cached['provider']}:{cached['reason']}")
+        return
+
+    decision = reputation_check(src_ip, cfg)
+    if decision is None:
+        return
+
+    if decision["decision"] == "block":
+        store_decision(
+            conn,
+            src_ip,
+            "block",
+            decision["provider"],
+            int(decision["score"]),
+            decision["reason"],
+            cfg.cache_block_ttl,
+            decision["raw"],
+        )
+        enforce(ip_obj, decision, cfg)
+    else:
+        log(f"clean reputation for {src_ip}: {decision['provider']}:{decision['reason']}")
+        store_decision(
+            conn,
+            src_ip,
+            "clean",
+            decision["provider"],
+            int(decision["score"]),
+            decision["reason"],
+            cfg.cache_clean_ttl,
+            decision["raw"],
+        )
+
+
+def follow_file(path: Path, from_start: bool) -> Any:
+    while RUNNING and not path.exists():
+        warn(f"waiting for {path}")
+        time.sleep(5)
+
+    with path.open("r", encoding="utf-8", errors="replace") as handle:
+        if not from_start:
+            handle.seek(0, os.SEEK_END)
+        while RUNNING:
+            line = handle.readline()
+            if line:
+                yield line
+                continue
+            time.sleep(0.25)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Read Suricata EVE and promote bad SIP sources to geoipsets.")
+    parser.add_argument("--once", action="store_true", help="read the current EVE file once and exit")
+    parser.add_argument("--from-start", action="store_true", help="start reading EVE from the beginning instead of EOF")
+    args = parser.parse_args()
+
+    signal.signal(signal.SIGTERM, handle_signal)
+    signal.signal(signal.SIGINT, handle_signal)
+
+    cfg = load_config()
+    conn = init_db(cfg.state_db)
+    allowlist = load_allowlist(cfg.allow_list)
+
+    log(f"watching {cfg.eve_file}; dry_run={int(cfg.dry_run)}")
+
+    if args.once:
+        if not cfg.eve_file.exists():
+            warn(f"{cfg.eve_file} does not exist")
+            return 1
+        lines = cfg.eve_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    else:
+        lines = follow_file(cfg.eve_file, args.from_start)
+
+    for line in lines:
+        event = extract_event(line)
+        if event is None:
+            continue
+        process_event(event, conn, cfg, allowlist)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

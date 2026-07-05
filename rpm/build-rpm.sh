@@ -33,6 +33,10 @@ install -pm 0644 "${repo_root}/rpm/geoipsets.blocklist-feeds.conf" "${source_dir
 install -pm 0755 "${repo_root}/rpm/geoipsets-fetch-blocklists" "${source_dir}/geoipsets-fetch-blocklists"
 install -pm 0755 "${repo_root}/rpm/geoipsets-ifbctl" "${source_dir}/geoipsets-ifbctl"
 install -pm 0755 "${repo_root}/rpm/geoipsets-update-all" "${source_dir}/geoipsets-update-all"
+install -pm 0640 "${repo_root}/rpm/geoipsets-reputation.env" "${source_dir}/geoipsets-reputation.env"
+install -pm 0755 "${repo_root}/rpm/geoipsets-reputation-worker" "${source_dir}/geoipsets-reputation-worker"
+install -pm 0644 "${repo_root}/rpm/geoipsets-reputation-worker.service" "${source_dir}/geoipsets-reputation-worker.service"
+install -pm 0644 "${repo_root}/rpm/geoipsets-local-sip.rules" "${source_dir}/geoipsets-local-sip.rules"
 install -pm 0644 "${spec}" "${spec_dir}/geoipsets.spec"
 
 rpmbuild -ba "${spec_dir}/geoipsets.spec" \

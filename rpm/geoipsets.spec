@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.18.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.19.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -21,6 +21,10 @@ Source8:        geoipsets.blocklist-feeds.conf
 Source9:        geoipsets-fetch-blocklists
 Source10:       geoipsets-ifbctl
 Source11:       geoipsets-update-all
+Source12:       geoipsets-reputation.env
+Source13:       geoipsets-reputation-worker
+Source14:       geoipsets-reputation-worker.service
+Source15:       geoipsets-local-sip.rules
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
@@ -29,10 +33,13 @@ BuildRequires:  systemd-rpm-macros
 
 Requires:       ipset
 Requires:       curl
+Requires:       conntrack-tools
 Requires:       iproute
 Requires:       iproute-tc
 Requires:       kmod
+Requires:       python3
 Requires:       systemd
+Recommends:     suricata
 
 %description
 geoipsets downloads country IP allocation data and generates files suitable for
@@ -65,10 +72,15 @@ install -Dpm 0644 %{SOURCE8} %{buildroot}%{_sysconfdir}/geoipsets.blocklist-feed
 install -Dpm 0755 %{SOURCE9} %{buildroot}%{_libexecdir}/geoipsets/fetch-blocklists
 install -Dpm 0755 %{SOURCE10} %{buildroot}%{_sbindir}/geoipsets-ifbctl
 install -Dpm 0755 %{SOURCE11} %{buildroot}%{_libexecdir}/geoipsets/update-all
+install -Dpm 0640 %{SOURCE12} %{buildroot}%{_sysconfdir}/geoipsets-reputation.env
+install -Dpm 0755 %{SOURCE13} %{buildroot}%{_libexecdir}/geoipsets/reputation-worker
+install -Dpm 0644 %{SOURCE14} %{buildroot}%{_unitdir}/geoipsets-reputation-worker.service
+install -Dpm 0644 %{SOURCE15} %{buildroot}%{_datadir}/geoipsets/suricata/local-sip.rules
 install -dpm 0755 %{buildroot}%{_sysconfdir}/geoipsets.blocklist.d
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets/blocklists
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets/blocklists/feeds
+install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets/reputation
 
 %check
 %pyproject_check_import
@@ -77,25 +89,27 @@ pushd python
 popd
 
 %post
-%systemd_post update-geoipsets.service update-geoipsets.timer
+%systemd_post update-geoipsets.service update-geoipsets.timer geoipsets-reputation-worker.service
 %tmpfiles_create geoipsets.conf
 if [ -f %{_sysconfdir}/geoipsets.blocklist-feeds.conf.rpmnew ]; then
     echo ">>> [RPM] %{_sysconfdir}/geoipsets.blocklist-feeds.conf.rpmnew contains updated default abuse feeds; merge or replace the existing config to enable them."
 fi
 
 %preun
-%systemd_preun update-geoipsets.service update-geoipsets.timer
+%systemd_preun update-geoipsets.service update-geoipsets.timer geoipsets-reputation-worker.service
 
 %postun
-%systemd_postun_with_restart update-geoipsets.service
+%systemd_postun_with_restart update-geoipsets.service geoipsets-reputation-worker.service
 %systemd_postun update-geoipsets.timer
 
 %files -f %{pyproject_files}
 %license LICENSE
 %doc python/README.md
+%doc docs/sip-ifb-reputation.md
 %config(noreplace) %{_sysconfdir}/geoipsets.conf
 %config(noreplace) %{_sysconfdir}/geoipsets.blocklist
 %config(noreplace) %{_sysconfdir}/geoipsets.blocklist-feeds.conf
+%config(noreplace) %attr(0640,root,root) %{_sysconfdir}/geoipsets-reputation.env
 %dir %{_sysconfdir}/geoipsets.blocklist.d
 %{_bindir}/geoipsets
 %{_sbindir}/geoipsets-ifbctl
@@ -103,14 +117,23 @@ fi
 %{_libexecdir}/geoipsets/refresh-blocklist
 %{_libexecdir}/geoipsets/fetch-blocklists
 %{_libexecdir}/geoipsets/update-all
+%{_libexecdir}/geoipsets/reputation-worker
 %{_unitdir}/update-geoipsets.service
 %{_unitdir}/update-geoipsets.timer
+%{_unitdir}/geoipsets-reputation-worker.service
 %{_tmpfilesdir}/geoipsets.conf
+%dir %{_datadir}/geoipsets
+%dir %{_datadir}/geoipsets/suricata
+%{_datadir}/geoipsets/suricata/local-sip.rules
 %dir %{_sharedstatedir}/geoipsets
 %dir %{_sharedstatedir}/geoipsets/blocklists
 %dir %{_sharedstatedir}/geoipsets/blocklists/feeds
+%dir %{_sharedstatedir}/geoipsets/reputation
 
 %changelog
+* Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.19.20260506gitfdc367f
+- Add local Suricata SIP reputation worker with IPQS and AbuseIPDB checks.
+
 * Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.18.20260506gitfdc367f
 - Support dummy-backed SIP mirror interfaces for local Suricata capture.
 

@@ -22,9 +22,9 @@ WAN SIP traffic
             |
             +--> Suricata watches ifb-sip0
                     |
-                    +--> EVE JSON alert
+                    +--> EVE JSON alert or SIP parser event
                             |
-                            +--> reputation worker checks cache/API
+                            +--> reputation worker checks local cache/API
                                     |
                                     +--> if bad: ipset add + conntrack delete + persist
                                     +--> if clean: cache checked result
@@ -287,6 +287,31 @@ af-packet:
 Keep Suricata in IDS/passive mode first. The firewall should not depend on
 Suricata for packet verdicts.
 
+The RPM ships local SIP reputation signal rules here:
+
+```text
+/usr/share/geoipsets/suricata/local-sip.rules
+```
+
+Copy or include that file as `local-sip.rules` in the Suricata rules directory,
+then add it to the local Suricata rule group list:
+
+```text
+group:emerging-dshield.rules
+group:emerging-scan.rules
+group:emerging-exploit.rules
+group:emerging-voip.rules
+group:emerging-dos.rules
+group:emerging-malware.rules
+group:emerging-worm.rules
+group:tor.rules
+group:local-sip.rules
+classtype:trojan-activity
+```
+
+Treat `emerging-deleted.rules` as log-only while testing. It can include rules
+removed upstream for age or quality reasons.
+
 If `tc -s filter show dev WAN ingress` shows mirrored packets but Suricata or
 `tcpdump` sees nothing, switch the helper to the dummy backend:
 
@@ -329,14 +354,22 @@ For UDP SIP, remove `flow:to_server,established` or create separate UDP rules.
 
 ## Reputation Worker
 
-The worker should be a small local service that reads Suricata EVE JSON alerts,
-groups events by source IP, checks a local cache first, and only then calls a
-reputation API or central reputation service.
+The RPM includes a stage-1 local worker:
+
+```text
+/usr/libexec/geoipsets/reputation-worker
+/usr/lib/systemd/system/geoipsets-reputation-worker.service
+/etc/geoipsets-reputation.env
+```
+
+The worker reads Suricata EVE JSON alerts and selected SIP parser events, groups
+events by source IP, checks a local SQLite cache first, and only then calls
+local API providers.
 
 Do not call external APIs from packet path rules.
 
-The API token should live in a root-readable environment file, not inside
-Shorewall rules or Suricata rules:
+The API tokens live in a root-readable environment file, not inside Shorewall
+rules or Suricata rules:
 
 ```text
 /etc/geoipsets-reputation.env
@@ -347,25 +380,32 @@ Example:
 ```bash
 IPQS_API_KEY=replace-with-real-token
 ABUSEIPDB_API_KEY=replace-with-real-token
-REPUTATION_API_URL=https://reputation.example.net/check
 ```
 
-For a central reputation service, the worker should send one source IP and event
-context, then receive a small decision object:
+Enable the worker:
 
-```json
-{
-  "ip": "45.146.55.104",
-  "decision": "block",
-  "reason": "vpn_proxy_and_sip_abuse",
-  "score": 100,
-  "expires_in": 604800
-}
+```bash
+systemctl enable --now geoipsets-reputation-worker.service
+journalctl -u geoipsets-reputation-worker.service -f
 ```
 
-If calling a vendor directly, normalize the vendor response into the same local
-fields: `vpn`, `proxy`, `tor`, `recent_abuse`, `score`, `decision`, and
-`expires_at`.
+Local state:
+
+```text
+/var/lib/geoipsets/reputation/reputation.sqlite
+/var/lib/geoipsets/blocklists/learned.list
+/var/lib/geoipsets/blocklists/allow.list
+```
+
+The allow list accepts one IP or CIDR per line and prevents promotion of known
+trusted SIP peers.
+
+The worker supports:
+
+```text
+IPQualityScore: proxy, VPN, Tor, recent abuse, bot, and fraud score signals
+AbuseIPDB: abuse confidence score and Tor signal
+```
 
 Recommended worker logic:
 
@@ -377,23 +417,16 @@ read Suricata EVE alert
   +-- ignore allowlisted source addresses
   +-- if source IP is already blocked: stop
   +-- if source IP was checked clean recently: log and stop
-  +-- if source IP has repeated suspicious hits: check reputation
+  +-- if source IP has repeated suspicious SIP parser events: check reputation
+  +-- if source IP creates a Suricata alert: check reputation immediately
           |
-          +-- IPQS / AbuseIPDB / central reputation API
+          +-- IPQS and/or AbuseIPDB
           +-- cache result with expiry
           |
           +-- if VPN/proxy/Tor/recent abuse/high score:
                  ipset add blocked_ipv4 SRCIP -exist
                  conntrack -D -s SRCIP
                  append SRCIP to learned blocklist
-```
-
-Suggested local state:
-
-```text
-/var/lib/geoipsets/reputation.sqlite
-/var/lib/geoipsets/blocklists/learned.list
-/var/lib/geoipsets/blocklists/allow.list
 ```
 
 Suggested cache fields:
@@ -447,6 +480,7 @@ block if:
   or tor == true
   or fraud_score >= 85
   or abuse_confidence >= 90
+  or recent_abuse == true
 
 block if:
   hosting/datacenter == true
@@ -477,6 +511,9 @@ printf '%s\n' 2001:db8::bad >> /var/lib/geoipsets/blocklists/learned.list
 The packaged `refresh-blocklist` helper should later load learned blocklist
 files into `blocked_ipv4` and `blocked_ipv6` so blocks survive reboot and ipset
 refreshes.
+
+The worker performs the live `ipset add` immediately, so a bad source is blocked
+before the next refresh.
 
 ## Shorewall Placement
 
