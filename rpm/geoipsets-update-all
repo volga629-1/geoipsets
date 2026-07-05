@@ -1,0 +1,35 @@
+#!/usr/bin/bash
+set -uo pipefail
+
+config_file="${GEOIPSETS_CONFIG:-/etc/geoipsets.conf}"
+refresh_ipset_args=()
+
+if [[ -n "${REFRESH_IPSET_ARGS:-}" ]]; then
+    # Intended for simple service overrides, for example:
+    # REFRESH_IPSET_ARGS=--legacy
+    read -r -a refresh_ipset_args <<< "${REFRESH_IPSET_ARGS}"
+fi
+
+geo_status=0
+feed_status=0
+block_status=0
+
+if /usr/bin/geoipsets --config-file "${config_file}"; then
+    /usr/libexec/geoipsets/refresh-ipset "${refresh_ipset_args[@]}" || geo_status=$?
+else
+    geo_status=$?
+    echo "WARNING: geoipsets country database update failed; skipping country ipset refresh" >&2
+fi
+
+/usr/libexec/geoipsets/fetch-blocklists || feed_status=$?
+/usr/libexec/geoipsets/refresh-blocklist || block_status=$?
+
+if (( geo_status != 0 )); then
+    exit "${geo_status}"
+fi
+
+if (( feed_status != 0 )); then
+    exit "${feed_status}"
+fi
+
+exit "${block_status}"

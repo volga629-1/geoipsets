@@ -333,11 +333,14 @@ sudo /usr/libexec/geoipsets/refresh-blocklist
 The packaged update service runs:
 
 ```text
-/usr/bin/geoipsets --config-file /etc/geoipsets.conf
-/usr/libexec/geoipsets/refresh-ipset
-/usr/libexec/geoipsets/fetch-blocklists
-/usr/libexec/geoipsets/refresh-blocklist
+/usr/libexec/geoipsets/update-all
 ```
+
+`update-all` runs the country database update, refreshes country ipsets, fetches
+dynamic abuse feeds, and refreshes `blocked_ipv4` and `blocked_ipv6`. If the
+DB-IP country database download fails, dynamic abuse feeds are still fetched and
+the block ipsets are still refreshed. The service exits nonzero afterward so the
+journal still reports the country database failure.
 
 Manual run:
 
@@ -350,10 +353,21 @@ If legacy Shorewall country set names are needed:
 
 ```ini
 [Service]
-ExecStartPost=
-ExecStartPost=/usr/libexec/geoipsets/refresh-ipset --legacy
-ExecStartPost=/usr/libexec/geoipsets/fetch-blocklists
-ExecStartPost=/usr/libexec/geoipsets/refresh-blocklist
+Environment=REFRESH_IPSET_ARGS=--legacy
+```
+
+After RPM upgrades, check whether RPM kept a new feed catalog as:
+
+```text
+/etc/geoipsets.blocklist-feeds.conf.rpmnew
+```
+
+If that file exists, merge it into `/etc/geoipsets.blocklist-feeds.conf` or
+replace the old file, then run:
+
+```bash
+sudo /usr/libexec/geoipsets/fetch-blocklists
+sudo /usr/libexec/geoipsets/refresh-blocklist
 ```
 
 ## Reputation API Design

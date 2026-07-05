@@ -18,7 +18,7 @@ fork has no release tags. The spec therefore packages the current Git commit as
 a snapshot release:
 
 ```text
-2.4.0-0.11.20260506gitfdc367f
+2.4.0-0.13.20260506gitfdc367f
 ```
 
 When an upstream release tag exists, update `Source0`, remove the commit
@@ -35,6 +35,7 @@ snapshot globals, and switch `Release` to `1%{?dist}`.
 - `/usr/libexec/geoipsets/refresh-ipset`: reloads generated ipset files
 - `/usr/libexec/geoipsets/fetch-blocklists`: downloads dynamic blocklist feeds
 - `/usr/libexec/geoipsets/refresh-blocklist`: reloads manual and dynamic blocklist ipsets
+- `/usr/libexec/geoipsets/update-all`: runs the full refresh sequence for systemd
 - `/usr/sbin/geoipsets-ifbctl`: optional SIP IFB mirror helper for Suricata
 - `/usr/lib/tmpfiles.d/geoipsets.conf`: creates `/var/lib/geoipsets`
 - `/var/lib/geoipsets`: generated provider output tree
@@ -43,13 +44,22 @@ The packaged default uses DB-IP, nftables output, and both IPv4 and IPv6. MaxMin
 is supported by the application but requires users to add credentials in
 `/etc/geoipsets.conf`.
 
-After generating files, `update-geoipsets.service` runs the ipset refresh helper.
-The helper flushes any existing generated sets and restores updated entries from
+`update-geoipsets.service` runs `/usr/libexec/geoipsets/update-all`. The wrapper
+generates country data, refreshes country ipsets, fetches dynamic abuse feeds,
+and refreshes `blocked_ipv4` and `blocked_ipv6`. If the DB-IP download fails,
+the wrapper still refreshes abuse feeds and block ipsets, then exits nonzero so
+the journal shows the country database failure.
+
+The country ipset helper restores updated entries from
 `/var/lib/geoipsets/dbip/ipset` using native set names such as `CA.ipv4` and
 `CA.ipv6`. For older Shorewall configurations that expect names such as
 `ipv4_CA` and `ipv6_CA`, run `/usr/libexec/geoipsets/refresh-ipset --legacy`.
-To make the timer use legacy names, add a systemd drop-in that clears and
-replaces `ExecStartPost` with the same command plus `--legacy`.
+To make the timer use legacy names, add a systemd drop-in:
+
+```ini
+[Service]
+Environment=REFRESH_IPSET_ARGS=--legacy
+```
 
 Manual proxy, VPN, and abuse endpoints can be added to `/etc/geoipsets.blocklist`
 or `/etc/geoipsets.blocklist.d/*.list` with one IP address or CIDR network per
@@ -71,25 +81,25 @@ using foomuri-style `iplist` entries:
 
 ```text
 iplist {
-    @abuseipdb https://raw.githubusercontent.com/borestad/blocklist-abuseipdb/main/abuseipdb-s100-14d.ipv4
+    @blocklist_de https://lists.blocklist.de/lists/all.txt
+    @techmdw https://blacklist.techmdw.com/
+    @greensnow https://blocklist.greensnow.co/greensnow.txt
     @et https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt
+    @interserver https://rbldata.interserver.net/ip.txt
+    @stopforumspam https://www.stopforumspam.com/downloads/toxic_ip_cidr.txt
+    @spamhausdrop https://cascadiacrow.com/spamhausblocks.txt
     @spamhausdropv6 https://www.spamhaus.org/drop/dropv6.txt
+    @blocklist_net_ua https://iplists.firehol.org/files/blocklist_net_ua.ipset
+    @abuseipdb https://raw.githubusercontent.com/borestad/blocklist-abuseipdb/main/abuseipdb-s100-14d.ipv4
 }
 ```
 
 Only put block feeds in this file. Country allowlists such as `@ipv4_CA` and
 `@ipv4_US` belong in geo policy sets, not in the blocklist feed config.
 
-If you override the service for legacy Shorewall country set names, keep the
-blocklist refresh in the override too:
-
-```ini
-[Service]
-ExecStartPost=
-ExecStartPost=/usr/libexec/geoipsets/refresh-ipset --legacy
-ExecStartPost=/usr/libexec/geoipsets/fetch-blocklists
-ExecStartPost=/usr/libexec/geoipsets/refresh-blocklist
-```
+Because the feed config is installed as `%config(noreplace)`, RPM may install
+updated defaults as `/etc/geoipsets.blocklist-feeds.conf.rpmnew`. Merge or
+replace the existing file if you want the new default feeds enabled.
 
 `output-dir` is the parent directory used by the application. The Python code
 appends `geoipsets/` internally, so the packaged `output-dir=/var/lib` writes

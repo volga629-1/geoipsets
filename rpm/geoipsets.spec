@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.12.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.13.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -20,6 +20,7 @@ Source7:        geoipsets-refresh-blocklist
 Source8:        geoipsets.blocklist-feeds.conf
 Source9:        geoipsets-fetch-blocklists
 Source10:       geoipsets-ifbctl
+Source11:       geoipsets-update-all
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
@@ -63,6 +64,7 @@ install -Dpm 0755 %{SOURCE7} %{buildroot}%{_libexecdir}/geoipsets/refresh-blockl
 install -Dpm 0644 %{SOURCE8} %{buildroot}%{_sysconfdir}/geoipsets.blocklist-feeds.conf
 install -Dpm 0755 %{SOURCE9} %{buildroot}%{_libexecdir}/geoipsets/fetch-blocklists
 install -Dpm 0755 %{SOURCE10} %{buildroot}%{_sbindir}/geoipsets-ifbctl
+install -Dpm 0755 %{SOURCE11} %{buildroot}%{_libexecdir}/geoipsets/update-all
 install -dpm 0755 %{buildroot}%{_sysconfdir}/geoipsets.blocklist.d
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets/blocklists
@@ -77,6 +79,9 @@ popd
 %post
 %systemd_post update-geoipsets.service update-geoipsets.timer
 %tmpfiles_create geoipsets.conf
+if [ -f %{_sysconfdir}/geoipsets.blocklist-feeds.conf.rpmnew ]; then
+    echo ">>> [RPM] %{_sysconfdir}/geoipsets.blocklist-feeds.conf.rpmnew contains updated default abuse feeds; merge or replace the existing config to enable them."
+fi
 
 %preun
 %systemd_preun update-geoipsets.service update-geoipsets.timer
@@ -97,6 +102,7 @@ popd
 %{_libexecdir}/geoipsets/refresh-ipset
 %{_libexecdir}/geoipsets/refresh-blocklist
 %{_libexecdir}/geoipsets/fetch-blocklists
+%{_libexecdir}/geoipsets/update-all
 %{_unitdir}/update-geoipsets.service
 %{_unitdir}/update-geoipsets.timer
 %{_tmpfilesdir}/geoipsets.conf
@@ -105,6 +111,10 @@ popd
 %dir %{_sharedstatedir}/geoipsets/blocklists/feeds
 
 %changelog
+* Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.13.20260506gitfdc367f
+- Continue refreshing abuse blocklists when the country database download fails.
+- Notify operators when updated feed defaults are installed as rpmnew.
+
 * Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.12.20260506gitfdc367f
 - Enable the default public abuse blocklist feed catalog.
 

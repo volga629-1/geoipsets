@@ -82,6 +82,7 @@ install -pm 0755 rpm/geoipsets-refresh-blocklist "${sources_dir}/geoipsets-refre
 install -pm 0644 rpm/geoipsets.blocklist-feeds.conf "${sources_dir}/geoipsets.blocklist-feeds.conf"
 install -pm 0755 rpm/geoipsets-fetch-blocklists "${sources_dir}/geoipsets-fetch-blocklists"
 install -pm 0755 rpm/geoipsets-ifbctl "${sources_dir}/geoipsets-ifbctl"
+install -pm 0755 rpm/geoipsets-update-all "${sources_dir}/geoipsets-update-all"
 ```
 
 Copy the spec into `~/rpmbuild/SPECS`:

@@ -7,10 +7,7 @@ AssertFileIsExecutable=/usr/bin/geoipsets
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/geoipsets --config-file /etc/geoipsets.conf
-ExecStartPost=/usr/libexec/geoipsets/refresh-ipset
-ExecStartPost=/usr/libexec/geoipsets/fetch-blocklists
-ExecStartPost=/usr/libexec/geoipsets/refresh-blocklist
+ExecStart=/usr/libexec/geoipsets/update-all
 StandardOutput=journal
 StandardError=journal
 

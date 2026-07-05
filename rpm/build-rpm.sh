@@ -32,6 +32,7 @@ install -pm 0755 "${repo_root}/rpm/geoipsets-refresh-blocklist" "${source_dir}/g
 install -pm 0644 "${repo_root}/rpm/geoipsets.blocklist-feeds.conf" "${source_dir}/geoipsets.blocklist-feeds.conf"
 install -pm 0755 "${repo_root}/rpm/geoipsets-fetch-blocklists" "${source_dir}/geoipsets-fetch-blocklists"
 install -pm 0755 "${repo_root}/rpm/geoipsets-ifbctl" "${source_dir}/geoipsets-ifbctl"
+install -pm 0755 "${repo_root}/rpm/geoipsets-update-all" "${source_dir}/geoipsets-update-all"
 install -pm 0644 "${spec}" "${spec_dir}/geoipsets.spec"
 
 rpmbuild -ba "${spec_dir}/geoipsets.spec" \
