@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.19.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.20.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -131,6 +131,9 @@ fi
 %dir %{_sharedstatedir}/geoipsets/reputation
 
 %changelog
+* Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.20.20260506gitfdc367f
+- Allow the reputation worker to read Suricata EVE logs via the suricata group.
+
 * Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.19.20260506gitfdc367f
 - Add local Suricata SIP reputation worker with IPQS and AbuseIPDB checks.
 

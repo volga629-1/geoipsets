@@ -12,6 +12,7 @@ Restart=on-failure
 RestartSec=10s
 StandardOutput=journal
 StandardError=journal
+SupplementaryGroups=suricata
 
 CapabilityBoundingSet=CAP_NET_ADMIN
 LockPersonality=true

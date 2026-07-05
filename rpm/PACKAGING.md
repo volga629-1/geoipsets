@@ -18,7 +18,7 @@ fork has no release tags. The spec therefore packages the current Git commit as
 a snapshot release:
 
 ```text
-2.4.0-0.19.20260506gitfdc367f
+2.4.0-0.20.20260506gitfdc367f
 ```
 
 When an upstream release tag exists, update `Source0`, remove the commit

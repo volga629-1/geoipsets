@@ -389,6 +389,15 @@ systemctl enable --now geoipsets-reputation-worker.service
 journalctl -u geoipsets-reputation-worker.service -f
 ```
 
+The packaged service joins the `suricata` supplementary group so it can read
+`/var/log/suricata/eve.json` while still running with a reduced capability set.
+If the service is installed manually, keep this setting:
+
+```ini
+[Service]
+SupplementaryGroups=suricata
+```
+
 Local state:
 
 ```text

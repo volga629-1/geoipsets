@@ -441,6 +441,9 @@ systemctl enable --now geoipsets-reputation-worker.service
 journalctl -u geoipsets-reputation-worker.service -f
 ```
 
+The service joins the `suricata` supplementary group so it can read
+`/var/log/suricata/eve.json` without granting broad DAC bypass capabilities.
+
 The worker supports IPQualityScore for proxy, VPN, Tor, recent abuse, bot, and
 fraud score signals. It supports AbuseIPDB for abuse confidence score and Tor
 signals.
