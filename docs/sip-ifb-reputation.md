@@ -38,6 +38,22 @@ On Fedora:
 sudo dnf install iproute-tc ipset conntrack-tools suricata jq curl
 ```
 
+When using the RPM package, `geoipsets-ifbctl` provides the IFB setup helper:
+
+```bash
+geoipsets-ifbctl start
+geoipsets-ifbctl status
+geoipsets-ifbctl stop
+```
+
+By default it mirrors SIP ports `5060 5061 5084` to `ifb-sip0` and auto-detects
+the IPv4 and IPv6 default-route interfaces. Override defaults with environment
+variables:
+
+```bash
+WAN_IF="ens3" MIRROR_IF=ifb-sip0 SIP_PORTS="5060 5061 5084" geoipsets-ifbctl start
+```
+
 Optional for a local cache:
 
 ```bash
@@ -141,6 +157,18 @@ sudo ip link del "${mirror_if}" 2>/dev/null || true
 Even when `nmcli` creates `ifb-sip0`, a separate hook is still needed for the
 `tc` filters. One simple approach is a oneshot systemd service.
 
+For Shorewall, the simplest hook is `/etc/shorewall/started`:
+
+```bash
+#!/usr/bin/bash
+WAN_IF="ens3" SIP_PORTS="5060 5061 5084" /usr/sbin/geoipsets-ifbctl start
+return 0
+```
+
+If `WAN_IF` is omitted, the helper detects IPv4 and IPv6 default-route
+interfaces and applies mirror filters to each unique interface.
+
+For non-RPM installs, the same behavior can be implemented with a local helper.
 Create `/usr/local/sbin/geoipsets-ifb-mirror`:
 
 ```bash

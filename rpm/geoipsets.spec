@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.9.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.10.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -19,6 +19,7 @@ Source6:        geoipsets.blocklist
 Source7:        geoipsets-refresh-blocklist
 Source8:        geoipsets.blocklist-feeds.conf
 Source9:        geoipsets-fetch-blocklists
+Source10:       geoipsets-ifbctl
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
@@ -27,6 +28,9 @@ BuildRequires:  systemd-rpm-macros
 
 Requires:       ipset
 Requires:       curl
+Requires:       iproute
+Requires:       iproute-tc
+Requires:       kmod
 Requires:       systemd
 
 %description
@@ -58,6 +62,7 @@ install -Dpm 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/geoipsets.blocklist
 install -Dpm 0755 %{SOURCE7} %{buildroot}%{_libexecdir}/geoipsets/refresh-blocklist
 install -Dpm 0644 %{SOURCE8} %{buildroot}%{_sysconfdir}/geoipsets.blocklist-feeds.conf
 install -Dpm 0755 %{SOURCE9} %{buildroot}%{_libexecdir}/geoipsets/fetch-blocklists
+install -Dpm 0755 %{SOURCE10} %{buildroot}%{_sbindir}/geoipsets-ifbctl
 install -dpm 0755 %{buildroot}%{_sysconfdir}/geoipsets.blocklist.d
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets/blocklists
@@ -88,6 +93,7 @@ popd
 %config(noreplace) %{_sysconfdir}/geoipsets.blocklist-feeds.conf
 %dir %{_sysconfdir}/geoipsets.blocklist.d
 %{_bindir}/geoipsets
+%{_sbindir}/geoipsets-ifbctl
 %{_libexecdir}/geoipsets/refresh-ipset
 %{_libexecdir}/geoipsets/refresh-blocklist
 %{_libexecdir}/geoipsets/fetch-blocklists
@@ -99,6 +105,9 @@ popd
 %dir %{_sharedstatedir}/geoipsets/blocklists/feeds
 
 %changelog
+* Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.10.20260506gitfdc367f
+- Add optional geoipsets-ifbctl helper for SIP IFB mirroring.
+
 * Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.9.20260506gitfdc367f
 - Add dynamic abuse blocklist feed fetching and loading.
 

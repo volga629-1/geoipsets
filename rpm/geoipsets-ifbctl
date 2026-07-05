@@ -1,0 +1,191 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+mirror_if="${MIRROR_IF:-ifb-sip0}"
+ports="${SIP_PORTS:-5060 5061 5084}"
+wan_if_override="${WAN_IF:-}"
+
+usage() {
+    cat >&2 <<EOF
+Usage: ${0##*/} start|stop|status
+
+Environment:
+  WAN_IF       Space-separated ingress interface list. If unset, auto-detect
+               IPv4 and IPv6 default-route interfaces.
+  MIRROR_IF    IFB mirror interface name. Default: ifb-sip0
+  SIP_PORTS    Space-separated SIP ports to mirror. Default: 5060 5061 5084
+EOF
+}
+
+detect_route_if() {
+    local family="$1"
+    local destination="$2"
+
+    if [[ "${family}" == "inet6" ]]; then
+        ip -6 route get "${destination}" 2>/dev/null
+    else
+        ip route get "${destination}" 2>/dev/null
+    fi | awk '
+        {
+            for (i = 1; i <= NF; i++) {
+                if ($i == "dev" && (i + 1) <= NF) {
+                    print $(i + 1)
+                    exit
+                }
+            }
+        }
+    '
+}
+
+add_unique_interface() {
+    local candidate="$1"
+    local existing
+
+    [[ -n "${candidate}" ]] || return 0
+
+    for existing in "${interfaces[@]}"; do
+        [[ "${existing}" == "${candidate}" ]] && return 0
+    done
+
+    interfaces+=("${candidate}")
+}
+
+get_interfaces() {
+    interfaces=()
+
+    if [[ -n "${wan_if_override}" ]]; then
+        local iface
+        for iface in ${wan_if_override}; do
+            add_unique_interface "${iface}"
+        done
+    else
+        add_unique_interface "$(detect_route_if inet 1.1.1.1)"
+        add_unique_interface "$(detect_route_if inet6 2606:4700:4700::1111)"
+    fi
+
+    if (( ${#interfaces[@]} == 0 )); then
+        echo "ERROR: unable to detect WAN interface; set WAN_IF" >&2
+        exit 1
+    fi
+}
+
+validate_ports() {
+    local port
+
+    for port in ${ports}; do
+        if [[ ! "${port}" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+            echo "ERROR: invalid SIP port: ${port}" >&2
+            exit 2
+        fi
+    done
+}
+
+replace_filter() {
+    local iface="$1"
+    local protocol="$2"
+    local preference="$3"
+    local ip_proto="$4"
+    local port="$5"
+
+    tc filter replace dev "${iface}" ingress protocol "${protocol}" pref "${preference}" flower \
+        ip_proto "${ip_proto}" dst_port "${port}" \
+        action mirred egress mirror dev "${mirror_if}"
+}
+
+delete_filter() {
+    local iface="$1"
+    local protocol="$2"
+    local preference="$3"
+
+    tc filter del dev "${iface}" ingress protocol "${protocol}" pref "${preference}" 2>/dev/null || true
+}
+
+start_mirror() {
+    local iface
+    local port
+
+    validate_ports
+    get_interfaces
+
+    modprobe ifb 2>/dev/null || true
+    ip link add "${mirror_if}" type ifb 2>/dev/null || true
+    ip link set "${mirror_if}" up
+
+    for iface in "${interfaces[@]}"; do
+        if ! ip link show dev "${iface}" >/dev/null 2>&1; then
+            echo "WARNING: skipped missing interface: ${iface}" >&2
+            continue
+        fi
+
+        tc qdisc add dev "${iface}" clsact 2>/dev/null || true
+
+        for port in ${ports}; do
+            replace_filter "${iface}" ip "$((100 + port))" udp "${port}"
+            replace_filter "${iface}" ip "$((200 + port))" tcp "${port}"
+            replace_filter "${iface}" ipv6 "$((300 + port))" udp "${port}"
+            replace_filter "${iface}" ipv6 "$((400 + port))" tcp "${port}"
+        done
+    done
+}
+
+stop_mirror() {
+    local iface
+    local port
+
+    validate_ports
+    get_interfaces
+
+    for iface in "${interfaces[@]}"; do
+        for port in ${ports}; do
+            delete_filter "${iface}" ip "$((100 + port))"
+            delete_filter "${iface}" ip "$((200 + port))"
+            delete_filter "${iface}" ipv6 "$((300 + port))"
+            delete_filter "${iface}" ipv6 "$((400 + port))"
+        done
+    done
+
+    ip link del "${mirror_if}" 2>/dev/null || true
+}
+
+show_status() {
+    local iface
+
+    get_interfaces
+
+    echo "mirror_if=${mirror_if}"
+    echo "sip_ports=${ports}"
+    printf 'wan_interfaces='
+    printf '%s ' "${interfaces[@]}"
+    printf '\n'
+
+    ip link show dev "${mirror_if}" 2>/dev/null || true
+
+    for iface in "${interfaces[@]}"; do
+        echo
+        echo "tc filters on ${iface}:"
+        tc filter show dev "${iface}" ingress 2>/dev/null || true
+    done
+}
+
+command="${1:-}"
+
+case "${command}" in
+    start)
+        start_mirror
+        ;;
+    stop)
+        stop_mirror
+        ;;
+    status)
+        show_status
+        ;;
+    --help|-h|"")
+        usage
+        [[ -n "${command}" ]] && exit 0 || exit 2
+        ;;
+    *)
+        echo "ERROR: unknown command: ${command}" >&2
+        usage
+        exit 2
+        ;;
+esac

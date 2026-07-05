@@ -18,7 +18,7 @@ fork has no release tags. The spec therefore packages the current Git commit as
 a snapshot release:
 
 ```text
-2.4.0-0.9.20260506gitfdc367f
+2.4.0-0.10.20260506gitfdc367f
 ```
 
 When an upstream release tag exists, update `Source0`, remove the commit
@@ -35,6 +35,7 @@ snapshot globals, and switch `Release` to `1%{?dist}`.
 - `/usr/libexec/geoipsets/refresh-ipset`: reloads generated ipset files
 - `/usr/libexec/geoipsets/fetch-blocklists`: downloads dynamic blocklist feeds
 - `/usr/libexec/geoipsets/refresh-blocklist`: reloads manual and dynamic blocklist ipsets
+- `/usr/sbin/geoipsets-ifbctl`: optional SIP IFB mirror helper for Suricata
 - `/usr/lib/tmpfiles.d/geoipsets.conf`: creates `/var/lib/geoipsets`
 - `/var/lib/geoipsets`: generated provider output tree
 
