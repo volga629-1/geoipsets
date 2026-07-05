@@ -1,8 +1,8 @@
-# SIP IFB Mirroring and Reputation Blocking
+# SIP Mirror Interface and Reputation Blocking
 
 This design keeps SIP traffic on the normal Shorewall path, mirrors a copy to a
-local inspection interface, and lets a reputation worker add bad sources to the
-`blocked_ipv4` and `blocked_ipv6` ipsets.
+local inspection interface, and lets a reputation worker add bad sources to
+the `blocked_ipv4` and `blocked_ipv6` ipsets.
 
 The important rule is that packet forwarding must not wait for an external API.
 Suricata and the reputation worker observe traffic out of band. Shorewall/ipset
@@ -38,7 +38,7 @@ On Fedora:
 sudo dnf install iproute-tc ipset conntrack-tools suricata jq curl
 ```
 
-When using the RPM package, `geoipsets-ifbctl` provides the IFB setup helper:
+When using the RPM package, `geoipsets-ifbctl` provides the mirror setup helper:
 
 ```bash
 geoipsets-ifbctl start
@@ -47,16 +47,20 @@ geoipsets-ifbctl stop
 geoipsets-ifbctl restart
 ```
 
-By default it mirrors SIP ports `5060 5061 5084` to `ifb-sip0` and auto-detects
-the IPv4 and IPv6 default-route interfaces. Override defaults with environment
-variables:
+By default it mirrors SIP ports `5060 5061 5084` to a dummy-backed
+`ifb-sip0` interface and auto-detects the IPv4 and IPv6 default-route
+interfaces. A dummy mirror is preferred for passive local capture because
+`tcpdump` and Suricata can read the mirrored packets directly. Override
+defaults with environment variables:
 
 ```bash
-WAN_IF="ens3" MIRROR_IF=ifb-sip0 SIP_PORTS="5060 5061 5084" geoipsets-ifbctl start
+WAN_IF="ens3" MIRROR_TYPE=dummy MIRROR_IF=ifb-sip0 SIP_PORTS="5060 5061 5084" geoipsets-ifbctl start
 ```
 
 `start` resets the managed `clsact` qdisc before installing mirror filters, so
 Shorewall restarts and port-list changes do not leave stale filters behind.
+It also replaces an existing mirror interface if the interface name exists with
+the wrong kernel type.
 
 Optional for a local cache:
 
@@ -64,7 +68,7 @@ Optional for a local cache:
 sudo dnf install sqlite
 ```
 
-## Create the IFB Mirror Interface
+## Create the Mirror Interface
 
 Replace `eth0` with the public/WAN interface that receives SIP traffic.
 
@@ -72,10 +76,13 @@ Replace `eth0` with the public/WAN interface that receives SIP traffic.
 wan_if=eth0
 mirror_if=ifb-sip0
 
-sudo modprobe ifb
-sudo ip link add "${mirror_if}" type ifb 2>/dev/null || true
-sudo ip link set "${mirror_if}" up
+sudo ip link add "${mirror_if}" type dummy 2>/dev/null || true
+sudo ip link set "${mirror_if}" txqueuelen 10000
+sudo ip link set "${mirror_if}" up promisc on
 ```
+
+If an IFB device is specifically required, use `MIRROR_TYPE=ifb` with
+`geoipsets-ifbctl` or create it manually with `ip link add "${mirror_if}" type ifb`.
 
 ## NetworkManager and nmcli
 
@@ -165,7 +172,7 @@ For Shorewall, the simplest hook is `/etc/shorewall/started`:
 
 ```bash
 #!/usr/bin/bash
-WAN_IF="ens3" SIP_PORTS="5060 5061 5084" /usr/sbin/geoipsets-ifbctl start
+WAN_IF="ens3" MIRROR_TYPE=dummy SIP_PORTS="5060 5061 5084 5086 5087 5088" /usr/sbin/geoipsets-ifbctl start
 return 0
 ```
 
@@ -183,9 +190,9 @@ wan_if="${WAN_IF:-eth0}"
 mirror_if="${MIRROR_IF:-ifb-sip0}"
 ports="${SIP_PORTS:-5060 5061 5084}"
 
-modprobe ifb
-ip link add "${mirror_if}" type ifb 2>/dev/null || true
-ip link set "${mirror_if}" up
+ip link add "${mirror_if}" type dummy 2>/dev/null || true
+ip link set "${mirror_if}" txqueuelen 10000
+ip link set "${mirror_if}" up promisc on
 
 tc qdisc add dev "${wan_if}" clsact 2>/dev/null || true
 
@@ -212,7 +219,7 @@ Create `/etc/systemd/system/geoipsets-ifb-mirror.service`:
 
 ```ini
 [Unit]
-Description=Mirror SIP traffic to IFB interface for local inspection
+Description=Mirror SIP traffic to local inspection interface
 After=network-online.target
 Wants=network-online.target
 
@@ -220,6 +227,7 @@ Wants=network-online.target
 Type=oneshot
 Environment=WAN_IF=eth0
 Environment=MIRROR_IF=ifb-sip0
+Environment=MIRROR_TYPE=dummy
 Environment="SIP_PORTS=5060 5061 5084"
 ExecStart=/usr/local/sbin/geoipsets-ifb-mirror
 RemainAfterExit=yes
@@ -278,6 +286,14 @@ af-packet:
 
 Keep Suricata in IDS/passive mode first. The firewall should not depend on
 Suricata for packet verdicts.
+
+If `tc -s filter show dev WAN ingress` shows mirrored packets but Suricata or
+`tcpdump` sees nothing, switch the helper to the dummy backend:
+
+```bash
+WAN_IF=ens3 MIRROR_TYPE=dummy SIP_PORTS="5060 5061 5084 5086 5087 5088" geoipsets-ifbctl restart
+tcpdump -ni ifb-sip0 -e -vv -s 0
+```
 
 ## Example SIP Detection Rules
 
@@ -474,5 +490,5 @@ allow public SIP policy
 log/drop everything else
 ```
 
-Keep the IFB mirror independent from Shorewall policy. The mirror is only for
+Keep the mirror independent from Shorewall policy. The mirror is only for
 observation; Shorewall/ipset are still the enforcement layer.

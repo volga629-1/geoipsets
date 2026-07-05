@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.17.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.18.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -111,6 +111,9 @@ fi
 %dir %{_sharedstatedir}/geoipsets/blocklists/feeds
 
 %changelog
+* Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.18.20260506gitfdc367f
+- Support dummy-backed SIP mirror interfaces for local Suricata capture.
+
 * Sun Jul 05 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.17.20260506gitfdc367f
 - Clean stale temporary ipsets left by interrupted or failed refreshes.
 

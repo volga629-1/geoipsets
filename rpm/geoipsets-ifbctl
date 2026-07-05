@@ -2,6 +2,8 @@
 set -euo pipefail
 
 mirror_if="${MIRROR_IF:-ifb-sip0}"
+mirror_type="${MIRROR_TYPE:-dummy}"
+mirror_qlen="${MIRROR_QLEN:-10000}"
 ports="${SIP_PORTS:-5060 5061 5084}"
 wan_if_override="${WAN_IF:-}"
 
@@ -13,7 +15,9 @@ Usage: ${0##*/} start|stop|status
 Environment:
   WAN_IF       Space-separated ingress interface list. If unset, auto-detect
                IPv4 and IPv6 default-route interfaces.
-  MIRROR_IF    IFB mirror interface name. Default: ifb-sip0
+  MIRROR_IF    Mirror interface name. Default: ifb-sip0
+  MIRROR_TYPE  Mirror interface type: dummy or ifb. Default: dummy
+  MIRROR_QLEN  Mirror interface transmit queue length. Default: 10000
   SIP_PORTS    Space-separated SIP ports to mirror. Default: 5060 5061 5084
 EOF
 }
@@ -81,6 +85,57 @@ validate_ports() {
     done
 }
 
+validate_mirror_type() {
+    case "${mirror_type}" in
+        dummy|ifb)
+            ;;
+        *)
+            echo "ERROR: invalid MIRROR_TYPE: ${mirror_type}; expected dummy or ifb" >&2
+            exit 2
+            ;;
+    esac
+
+    if [[ ! "${mirror_qlen}" =~ ^[0-9]+$ ]] || (( mirror_qlen < 1 )); then
+        echo "ERROR: invalid MIRROR_QLEN: ${mirror_qlen}" >&2
+        exit 2
+    fi
+}
+
+mirror_interface_matches_type() {
+    local details
+
+    details="$(ip -d link show dev "${mirror_if}" 2>/dev/null || true)"
+    [[ -n "${details}" ]] || return 1
+
+    case "${mirror_type}" in
+        dummy)
+            grep -Eq "^[[:space:]]+dummy([[:space:]]|$)" <<<"${details}"
+            ;;
+        ifb)
+            grep -Eq "^[[:space:]]+ifb([[:space:]]|$)" <<<"${details}"
+            ;;
+    esac
+}
+
+ensure_mirror_interface() {
+    validate_mirror_type
+
+    if [[ "${mirror_type}" == "ifb" ]]; then
+        modprobe ifb 2>/dev/null || true
+    fi
+
+    if ip link show dev "${mirror_if}" >/dev/null 2>&1 && ! mirror_interface_matches_type; then
+        ip link del "${mirror_if}"
+    fi
+
+    if ! ip link show dev "${mirror_if}" >/dev/null 2>&1; then
+        ip link add "${mirror_if}" type "${mirror_type}"
+    fi
+
+    ip link set "${mirror_if}" txqueuelen "${mirror_qlen}" 2>/dev/null || true
+    ip link set "${mirror_if}" up promisc on
+}
+
 replace_filter() {
     local iface="$1"
     local protocol="$2"
@@ -107,9 +162,7 @@ start_mirror() {
     validate_ports
     get_interfaces
 
-    modprobe ifb 2>/dev/null || true
-    ip link add "${mirror_if}" type ifb 2>/dev/null || true
-    ip link set "${mirror_if}" up
+    ensure_mirror_interface
 
     for iface in "${interfaces[@]}"; do
         if ! ip link show dev "${iface}" >/dev/null 2>&1; then
@@ -146,6 +199,8 @@ show_status() {
     get_interfaces
 
     echo "mirror_if=${mirror_if}"
+    echo "mirror_type=${mirror_type}"
+    echo "mirror_qlen=${mirror_qlen}"
     echo "sip_ports=${ports}"
     printf 'wan_interfaces='
     printf '%s ' "${interfaces[@]}"

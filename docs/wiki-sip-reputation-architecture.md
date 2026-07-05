@@ -1,7 +1,7 @@
 # SIP Reputation Blocking Architecture
 
 This page documents the SIP abuse detection and blocking workflow built around
-Shorewall, IFB packet mirroring, Suricata, and `geoipsets`.
+Shorewall, local packet mirroring, Suricata, and `geoipsets`.
 
 The design keeps packet forwarding fast and local. Reputation lookups and
 Suricata inspection run out of band, while Shorewall and ipset remain the
@@ -24,7 +24,7 @@ flowchart TD
     C -->|"yes"| D["DROP"]
     C -->|"no"| E["Normal SIP policy"]
 
-    A -. "tc mirred copy" .-> F["ifb-sip0"]
+    A -. "tc mirred copy" .-> F["ifb-sip0 mirror interface"]
     F --> G["Suricata IDS"]
     G --> H["EVE JSON alerts"]
     H --> I["Reputation worker"]
@@ -42,9 +42,9 @@ flowchart TD
 
 | Component | Role |
 | --- | --- |
-| Shorewall | Enforces drops, allows trusted SIP policy, starts IFB helper from `started`. |
+| Shorewall | Enforces drops, allows trusted SIP policy, starts the mirror helper from `started`. |
 | ipset | Holds live block sets such as `blocked_ipv4` and `blocked_ipv6`. |
-| `geoipsets-ifbctl` | Creates `ifb-sip0` and mirrors selected SIP ports using `tc flower` and `mirred`. |
+| `geoipsets-ifbctl` | Creates the mirror interface and mirrors selected SIP ports using `tc flower` and `mirred`. |
 | Suricata | Watches mirrored SIP traffic and writes alerts to `eve.json`. |
 | `fetch-blocklists` | Downloads configured public abuse feeds into `/var/lib/geoipsets/blocklists/feeds`. |
 | `refresh-blocklist` | Loads manual, dynamic, and learned lists into `blocked_ipv4` and `blocked_ipv6`. |
@@ -56,7 +56,7 @@ flowchart TD
 sequenceDiagram
     participant Internet
     participant Shorewall
-    participant IFB as ifb-sip0
+    participant IFB as ifb-sip0 mirror
     participant Suricata
     participant Worker as Reputation worker
     participant Ipset as blocked_ipv4/blocked_ipv6
@@ -101,7 +101,7 @@ Recommended policy order:
 5. reject/log everything else
 ```
 
-## IFB Mirroring
+## SIP Mirroring
 
 The RPM installs:
 
@@ -122,13 +122,18 @@ Example Shorewall hook in `/etc/shorewall/started`:
 
 ```bash
 #!/usr/bin/bash
-WAN_IF="ens3" SIP_PORTS="5060 5061 5084 5086 5087 5088" /usr/sbin/geoipsets-ifbctl start
+WAN_IF="ens3" MIRROR_TYPE=dummy SIP_PORTS="5060 5061 5084 5086 5087 5088" /usr/sbin/geoipsets-ifbctl start
 return 0
 ```
 
 `geoipsets-ifbctl start` resets the managed `clsact` qdisc before installing
 filters, so Shorewall restarts and SIP port-list changes do not leave stale
 filters behind.
+
+The default mirror backend is `dummy`, while `MIRROR_TYPE=ifb` remains available
+if a site specifically wants an IFB device. The dummy backend is preferred for
+local passive capture because `tcpdump` and Suricata can read mirrored packets
+directly from the interface.
 
 Verification:
 
@@ -428,7 +433,7 @@ nodes may run from datacenter networks.
 
 ## Troubleshooting
 
-Check IFB filters:
+Check mirror filters:
 
 ```bash
 geoipsets-ifbctl status
@@ -439,6 +444,13 @@ Check mirrored packets:
 
 ```bash
 tcpdump -ni ifb-sip0 'port 5060 or port 5061 or port 5084 or port 5086 or port 5087 or port 5088'
+```
+
+If `tc -s filter show dev ens3 ingress` shows packets but `tcpdump` or
+Suricata sees nothing, restart the mirror with the dummy backend:
+
+```bash
+WAN_IF=ens3 MIRROR_TYPE=dummy SIP_PORTS="5060 5061 5084 5086 5087 5088" geoipsets-ifbctl restart
 ```
 
 Check Suricata:

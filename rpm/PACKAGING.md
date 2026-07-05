@@ -2,8 +2,8 @@
 
 This directory contains Fedora-style packaging for `geoipsets`.
 
-For SIP abuse detection with Suricata, IFB mirroring, and API-backed reputation
-checks, see `docs/sip-ifb-reputation.md`.
+For SIP abuse detection with Suricata, local traffic mirroring, and API-backed
+reputation checks, see `docs/sip-ifb-reputation.md`.
 
 The spec follows Fedora Python packaging practice by using the pyproject RPM
 macros against the upstream `python/` subdirectory:
@@ -18,7 +18,7 @@ fork has no release tags. The spec therefore packages the current Git commit as
 a snapshot release:
 
 ```text
-2.4.0-0.17.20260506gitfdc367f
+2.4.0-0.18.20260506gitfdc367f
 ```
 
 When an upstream release tag exists, update `Source0`, remove the commit
@@ -36,7 +36,7 @@ snapshot globals, and switch `Release` to `1%{?dist}`.
 - `/usr/libexec/geoipsets/fetch-blocklists`: downloads dynamic blocklist feeds
 - `/usr/libexec/geoipsets/refresh-blocklist`: reloads manual and dynamic blocklist ipsets
 - `/usr/libexec/geoipsets/update-all`: runs the full refresh sequence for systemd
-- `/usr/sbin/geoipsets-ifbctl`: optional SIP IFB mirror helper for Suricata
+- `/usr/sbin/geoipsets-ifbctl`: optional SIP mirror helper for Suricata
 - `/usr/lib/tmpfiles.d/geoipsets.conf`: creates `/var/lib/geoipsets`
 - `/var/lib/geoipsets`: generated provider output tree
 
@@ -127,6 +127,15 @@ sudo /usr/libexec/geoipsets/refresh-blocklist --maxelem 2097152
 `output-dir` is the parent directory used by the application. The Python code
 appends `geoipsets/` internally, so the packaged `output-dir=/var/lib` writes
 generated files under `/var/lib/geoipsets`.
+
+`geoipsets-ifbctl` mirrors selected SIP ports to a local capture interface. The
+default backend is a dummy interface named `ifb-sip0`, which works well for
+local `tcpdump` and Suricata capture. Use `MIRROR_TYPE=ifb` only when an IFB
+device is specifically required. Example Shorewall hook:
+
+```bash
+WAN_IF="ens18" MIRROR_TYPE=dummy SIP_PORTS="5060 5061 5084 5086 5087 5088" /usr/sbin/geoipsets-ifbctl start
+```
 
 ## Build locally
 
