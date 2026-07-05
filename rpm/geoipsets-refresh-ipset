@@ -3,11 +3,20 @@ set -euo pipefail
 
 legacy=false
 provider="dbip"
+maxelem=131072
 
 while (( $# > 0 )); do
     case "$1" in
         --legacy)
             legacy=true
+            ;;
+        --maxelem)
+            if (( $# < 2 )); then
+                echo "ERROR: --maxelem requires a value" >&2
+                exit 2
+            fi
+            maxelem="$2"
+            shift
             ;;
         --provider)
             if (( $# < 2 )); then
@@ -18,7 +27,7 @@ while (( $# > 0 )); do
             shift
             ;;
         --help|-h)
-            echo "Usage: ${0##*/} [--legacy] [--provider PROVIDER]" >&2
+            echo "Usage: ${0##*/} [--legacy] [--provider PROVIDER] [--maxelem MINIMUM]" >&2
             exit 0
             ;;
         *)
@@ -27,6 +36,11 @@ while (( $# > 0 )); do
     esac
     shift
 done
+
+if [[ ! "${maxelem}" =~ ^[0-9]+$ ]] || (( maxelem < 1 )); then
+    echo "ERROR: --maxelem must be a positive integer" >&2
+    exit 2
+fi
 
 base_dir="/var/lib/geoipsets/${provider}/ipset"
 
@@ -48,25 +62,109 @@ set_supports_comment() {
     ipset list "${set_name}" | grep -qw 'comment'
 }
 
-restore_existing_set() {
+count_entries() {
+    local file="$1"
+    local count
+
+    count="$(grep -c '^[[:space:]]*add[[:space:]]' "${file}" || true)"
+    printf '%s' "${count//[[:space:]]/}"
+}
+
+calculate_maxelem() {
+    local entry_count="$1"
+    local minimum="$2"
+    local autosized
+
+    autosized=$((entry_count + ((entry_count + 3) / 4)))
+
+    if (( autosized < minimum )); then
+        printf '%s' "${minimum}"
+    else
+        printf '%s' "${autosized}"
+    fi
+}
+
+rewrite_create_maxelem() {
+    local restore_file="$1"
+    local set_maxelem="$2"
+    local rewritten
+
+    rewritten="$(mktemp)"
+
+    awk -v maxelem="${set_maxelem}" '
+        /^[[:space:]]*create[[:space:]]/ {
+            if ($0 ~ /[[:space:]]maxelem[[:space:]][0-9]+/) {
+                sub(/[[:space:]]maxelem[[:space:]][0-9]+/, " maxelem " maxelem)
+            } else if ($0 ~ /[[:space:]]comment([[:space:]]|$)/) {
+                sub(/[[:space:]]comment([[:space:]]|$)/, " maxelem " maxelem " comment ")
+            } else {
+                $0 = $0 " maxelem " maxelem
+            }
+        }
+        { print }
+    ' "${restore_file}" > "${rewritten}"
+
+    mv "${rewritten}" "${restore_file}"
+}
+
+prepare_restore_file() {
     local set_name="$1"
     local file="$2"
     local source_pattern="$3"
-    local temp_set="${set_name}_tmp_$$"
+    local strip_comment="$4"
+    local restore_file
+    local stripped
+    local entry_count
+    local set_maxelem
 
-    ipset destroy "${temp_set}" >/dev/null 2>&1 || true
+    restore_file="$(mktemp)"
 
-    if set_supports_comment "${set_name}"; then
-        sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${temp_set}\\3/" "${file}" \
-            | ipset restore -exist
-    else
-        sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${temp_set}\\3/" "${file}" \
-            | sed -E 's/[[:space:]]+comment([[:space:]][^[:space:]]+)?$//' \
-            | ipset restore -exist
+    sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" > "${restore_file}"
+
+    if [[ "${strip_comment}" == true ]]; then
+        stripped="$(mktemp)"
+        sed -E 's/[[:space:]]+comment([[:space:]][^[:space:]]+)?$//' "${restore_file}" > "${stripped}"
+        mv "${stripped}" "${restore_file}"
     fi
 
-    ipset swap "${temp_set}" "${set_name}"
-    ipset destroy "${temp_set}"
+    entry_count="$(count_entries "${restore_file}")"
+    set_maxelem="$(calculate_maxelem "${entry_count}" "${maxelem}")"
+    rewrite_create_maxelem "${restore_file}" "${set_maxelem}"
+
+    echo "Prepared ${set_name}: entries=${entry_count} maxelem=${set_maxelem}" >&2
+    printf '%s' "${restore_file}"
+}
+
+restore_set() {
+    local set_name="$1"
+    local file="$2"
+    local source_pattern="$3"
+    local existing="$4"
+    local strip_comment=false
+    local temp_set="${set_name}_tmp_$$"
+    local restore_name="${set_name}"
+    local restore_file
+
+    if [[ "${existing}" == true ]]; then
+        ipset destroy "${temp_set}" >/dev/null 2>&1 || true
+        restore_name="${temp_set}"
+
+        if ! set_supports_comment "${set_name}"; then
+            strip_comment=true
+        fi
+    fi
+
+    restore_file="$(prepare_restore_file "${restore_name}" "${file}" "${source_pattern}" "${strip_comment}")"
+
+    if [[ "${existing}" == true ]]; then
+        ipset restore -exist -file "${restore_file}"
+        ipset swap "${temp_set}" "${set_name}"
+        ipset destroy "${temp_set}"
+    else
+        ipset restore -exist -file "${restore_file}"
+    fi
+
+    rm -f "${restore_file}"
 }
 
 for file in "${files[@]}"; do
@@ -79,19 +177,18 @@ for file in "${files[@]}"; do
         source_pattern="${source_name//./\\.}"
 
         if ipset list "${set_name}" >/dev/null 2>&1; then
-            restore_existing_set "${set_name}" "${file}" "${source_pattern}"
+            restore_set "${set_name}" "${file}" "${source_pattern}" true
         else
-            sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${set_name}\\3/" "${file}" \
-                | ipset restore -exist
+            restore_set "${set_name}" "${file}" "${source_pattern}" false
         fi
     else
         set_name="${source_name}"
         source_pattern="${source_name//./\\.}"
 
         if ipset list "${set_name}" >/dev/null 2>&1; then
-            restore_existing_set "${set_name}" "${file}" "${source_pattern}"
+            restore_set "${set_name}" "${file}" "${source_pattern}" true
         else
-            ipset restore -exist -file "${file}"
+            restore_set "${set_name}" "${file}" "${source_pattern}" false
         fi
     fi
 done

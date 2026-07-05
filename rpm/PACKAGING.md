@@ -18,7 +18,7 @@ fork has no release tags. The spec therefore packages the current Git commit as
 a snapshot release:
 
 ```text
-2.4.0-0.15.20260506gitfdc367f
+2.4.0-0.16.20260506gitfdc367f
 ```
 
 When an upstream release tag exists, update `Source0`, remove the commit
@@ -54,11 +54,19 @@ The country ipset helper restores updated entries from
 `/var/lib/geoipsets/dbip/ipset` using native set names such as `CA.ipv4` and
 `CA.ipv6`. For older Shorewall configurations that expect names such as
 `ipv4_CA` and `ipv6_CA`, run `/usr/libexec/geoipsets/refresh-ipset --legacy`.
+Country ipsets are also auto-sized with 25% headroom during refresh.
 To make the timer use legacy names, add a systemd drop-in:
 
 ```ini
 [Service]
 Environment=REFRESH_IPSET_ARGS=--legacy
+```
+
+If country sets need a larger minimum ipset size, add:
+
+```ini
+[Service]
+Environment=COUNTRY_MAXELEM=2097152
 ```
 
 Manual proxy, VPN, and abuse endpoints can be added to `/etc/geoipsets.blocklist`

@@ -11,6 +11,10 @@ if [[ -n "${REFRESH_IPSET_ARGS:-}" ]]; then
     read -r -a refresh_ipset_args <<< "${REFRESH_IPSET_ARGS}"
 fi
 
+if [[ -n "${COUNTRY_MAXELEM:-}" ]]; then
+    refresh_ipset_args+=(--maxelem "${COUNTRY_MAXELEM}")
+fi
+
 if [[ -n "${BLOCKLIST_MAXELEM:-}" ]]; then
     refresh_blocklist_args=(--maxelem "${BLOCKLIST_MAXELEM}")
 fi

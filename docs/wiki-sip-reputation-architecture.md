@@ -360,6 +360,14 @@ If legacy Shorewall country set names are needed:
 Environment=REFRESH_IPSET_ARGS=--legacy
 ```
 
+Country ipsets are auto-sized with 25% headroom during refresh. If a larger
+minimum is needed:
+
+```ini
+[Service]
+Environment=COUNTRY_MAXELEM=2097152
+```
+
 If very large public feeds need a higher minimum blocklist ipset size:
 
 ```ini
