@@ -9,7 +9,7 @@ The spec currently packages this Git snapshot:
 ```text
 commit: fdc367fade27b946f7694423f61add42359e031b
 version: 2.4.0
-release: 0.1.20260506gitfdc367f
+release: 0.8.20260506gitfdc367f
 ```
 
 If you build from a different commit, update the `commit`, `shortcommit`, and
@@ -77,6 +77,8 @@ install -pm 0644 rpm/update-geoipsets.service "${sources_dir}/update-geoipsets.s
 install -pm 0644 rpm/update-geoipsets.timer "${sources_dir}/update-geoipsets.timer"
 install -pm 0644 rpm/geoipsets.tmpfiles "${sources_dir}/geoipsets.tmpfiles"
 install -pm 0755 rpm/geoipsets-refresh-ipset "${sources_dir}/geoipsets-refresh-ipset"
+install -pm 0644 rpm/geoipsets.blocklist "${sources_dir}/geoipsets.blocklist"
+install -pm 0755 rpm/geoipsets-refresh-blocklist "${sources_dir}/geoipsets-refresh-blocklist"
 ```
 
 Copy the spec into `~/rpmbuild/SPECS`:

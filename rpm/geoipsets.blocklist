@@ -1,0 +1,12 @@
+# Manual public proxy/VPN/abuse endpoint blocklist.
+#
+# Add one IP address or CIDR network per line. Blank lines and comments are
+# ignored. The packaged refresh helper loads these entries into:
+#
+#   blocked_ipv4
+#   blocked_ipv6
+#
+# Examples:
+# 45.146.55.104
+# 203.0.113.0/24
+# 2001:db8:bad::/48

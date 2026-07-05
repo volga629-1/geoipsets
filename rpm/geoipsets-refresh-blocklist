@@ -1,0 +1,111 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+blocklist_file="/etc/geoipsets.blocklist"
+ipv4_set="blocked_ipv4"
+ipv6_set="blocked_ipv6"
+maxelem=131072
+
+while (( $# > 0 )); do
+    case "$1" in
+        --file)
+            if (( $# < 2 )); then
+                echo "ERROR: --file requires a value" >&2
+                exit 2
+            fi
+            blocklist_file="$2"
+            shift
+            ;;
+        --ipv4-set)
+            if (( $# < 2 )); then
+                echo "ERROR: --ipv4-set requires a value" >&2
+                exit 2
+            fi
+            ipv4_set="$2"
+            shift
+            ;;
+        --ipv6-set)
+            if (( $# < 2 )); then
+                echo "ERROR: --ipv6-set requires a value" >&2
+                exit 2
+            fi
+            ipv6_set="$2"
+            shift
+            ;;
+        --maxelem)
+            if (( $# < 2 )); then
+                echo "ERROR: --maxelem requires a value" >&2
+                exit 2
+            fi
+            maxelem="$2"
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: ${0##*/} [--file PATH] [--ipv4-set NAME] [--ipv6-set NAME] [--maxelem COUNT]" >&2
+            exit 0
+            ;;
+        *)
+            echo "ERROR: unknown option: $1" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+if [[ ! "${maxelem}" =~ ^[0-9]+$ ]] || (( maxelem < 1 )); then
+    echo "ERROR: --maxelem must be a positive integer" >&2
+    exit 2
+fi
+
+tmp_ipv4="$(mktemp)"
+tmp_ipv6="$(mktemp)"
+
+cleanup() {
+    rm -f "${tmp_ipv4}" "${tmp_ipv6}"
+}
+trap cleanup EXIT
+
+{
+    printf 'create %s hash:net family inet maxelem %s\n' "${ipv4_set}" "${maxelem}"
+} > "${tmp_ipv4}"
+
+{
+    printf 'create %s hash:net family inet6 maxelem %s\n' "${ipv6_set}" "${maxelem}"
+} > "${tmp_ipv6}"
+
+if [[ -f "${blocklist_file}" ]]; then
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        entry="${line%%#*}"
+        entry="${entry#"${entry%%[![:space:]]*}"}"
+        entry="${entry%"${entry##*[![:space:]]}"}"
+
+        [[ -z "${entry}" ]] && continue
+
+        if [[ "${entry}" == *:* ]]; then
+            printf 'add %s %s\n' "${ipv6_set}" "${entry}" >> "${tmp_ipv6}"
+        else
+            printf 'add %s %s\n' "${ipv4_set}" "${entry}" >> "${tmp_ipv4}"
+        fi
+    done < "${blocklist_file}"
+fi
+
+refresh_set() {
+    local set_name="$1"
+    local restore_file="$2"
+    local source_pattern="${set_name//./\\.}"
+    local temp_set="${set_name}_tmp_$$"
+
+    ipset destroy "${temp_set}" >/dev/null 2>&1 || true
+
+    if ipset list "${set_name}" >/dev/null 2>&1; then
+        sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${temp_set}\\3/" "${restore_file}" \
+            | ipset restore -exist
+        ipset swap "${temp_set}" "${set_name}"
+        ipset destroy "${temp_set}"
+    else
+        ipset restore -exist -file "${restore_file}"
+    fi
+}
+
+refresh_set "${ipv4_set}" "${tmp_ipv4}"
+refresh_set "${ipv6_set}" "${tmp_ipv6}"

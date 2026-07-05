@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.7.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.8.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -15,6 +15,8 @@ Source2:        update-geoipsets.service
 Source3:        update-geoipsets.timer
 Source4:        geoipsets.tmpfiles
 Source5:        geoipsets-refresh-ipset
+Source6:        geoipsets.blocklist
+Source7:        geoipsets-refresh-blocklist
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
@@ -49,6 +51,8 @@ install -Dpm 0644 %{SOURCE2} %{buildroot}%{_unitdir}/update-geoipsets.service
 install -Dpm 0644 %{SOURCE3} %{buildroot}%{_unitdir}/update-geoipsets.timer
 install -Dpm 0644 %{SOURCE4} %{buildroot}%{_tmpfilesdir}/geoipsets.conf
 install -Dpm 0755 %{SOURCE5} %{buildroot}%{_libexecdir}/geoipsets/refresh-ipset
+install -Dpm 0644 %{SOURCE6} %{buildroot}%{_sysconfdir}/geoipsets.blocklist
+install -Dpm 0755 %{SOURCE7} %{buildroot}%{_libexecdir}/geoipsets/refresh-blocklist
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets
 
 %check
@@ -72,14 +76,19 @@ popd
 %license LICENSE
 %doc python/README.md
 %config(noreplace) %{_sysconfdir}/geoipsets.conf
+%config(noreplace) %{_sysconfdir}/geoipsets.blocklist
 %{_bindir}/geoipsets
 %{_libexecdir}/geoipsets/refresh-ipset
+%{_libexecdir}/geoipsets/refresh-blocklist
 %{_unitdir}/update-geoipsets.service
 %{_unitdir}/update-geoipsets.timer
 %{_tmpfilesdir}/geoipsets.conf
 %dir %{_sharedstatedir}/geoipsets
 
 %changelog
+* Sat Jul 04 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.8.20260506gitfdc367f
+- Add manual public proxy/VPN abuse blocklist ipsets.
+
 * Sun Jun 28 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.7.20260506gitfdc367f
 - Refresh existing ipsets via temporary sets and swap to apply generated maxelem.
 

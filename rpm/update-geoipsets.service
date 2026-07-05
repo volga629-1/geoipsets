@@ -9,6 +9,7 @@ AssertFileIsExecutable=/usr/bin/geoipsets
 Type=oneshot
 ExecStart=/usr/bin/geoipsets --config-file /etc/geoipsets.conf
 ExecStartPost=/usr/libexec/geoipsets/refresh-ipset
+ExecStartPost=/usr/libexec/geoipsets/refresh-blocklist
 StandardOutput=journal
 StandardError=journal
 
