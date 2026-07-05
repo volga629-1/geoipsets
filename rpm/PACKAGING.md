@@ -2,6 +2,9 @@
 
 This directory contains Fedora-style packaging for `geoipsets`.
 
+For SIP abuse detection with Suricata, IFB mirroring, and API-backed reputation
+checks, see `docs/sip-ifb-reputation.md`.
+
 The spec follows Fedora Python packaging practice by using the pyproject RPM
 macros against the upstream `python/` subdirectory:
 
