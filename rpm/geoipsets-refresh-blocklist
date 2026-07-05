@@ -72,9 +72,16 @@ tmp_ipv4="$(mktemp)"
 tmp_ipv6="$(mktemp)"
 tmp_ipv4_body="$(mktemp)"
 tmp_ipv6_body="$(mktemp)"
+temp_sets=()
 
 cleanup() {
+    local set_name
+
     rm -f "${tmp_ipv4}" "${tmp_ipv6}" "${tmp_ipv4_body}" "${tmp_ipv6_body}"
+
+    for set_name in "${temp_sets[@]}"; do
+        ipset destroy "${set_name}" >/dev/null 2>&1 || true
+    done
 }
 trap cleanup EXIT
 
@@ -163,6 +170,20 @@ write_restore_file() {
 write_restore_file "${ipv4_set}" inet "${tmp_ipv4_body}" "${tmp_ipv4}"
 write_restore_file "${ipv6_set}" inet6 "${tmp_ipv6_body}" "${tmp_ipv6}"
 
+destroy_stale_temp_sets() {
+    local set_name
+    local pattern
+
+    pattern="^(${ipv4_set}|${ipv6_set})_tmp_[0-9]+$"
+
+    while IFS= read -r set_name; do
+        [[ "${set_name}" =~ ${pattern} ]] || continue
+        ipset destroy "${set_name}" >/dev/null 2>&1 || true
+    done < <(ipset list -name 2>/dev/null || true)
+}
+
+destroy_stale_temp_sets
+
 refresh_set() {
     local set_name="$1"
     local restore_file="$2"
@@ -172,6 +193,7 @@ refresh_set() {
     ipset destroy "${temp_set}" >/dev/null 2>&1 || true
 
     if ipset list "${set_name}" >/dev/null 2>&1; then
+        temp_sets+=("${temp_set}")
         sed -E "s/^((create|add)[[:space:]]+)${source_pattern}([[:space:]]|$)/\\1${temp_set}\\3/" "${restore_file}" \
             | ipset restore -exist
         ipset swap "${temp_set}" "${set_name}"
