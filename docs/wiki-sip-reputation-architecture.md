@@ -451,17 +451,28 @@ The worker supports IPQualityScore for proxy, VPN, Tor, recent abuse, bot, and
 fraud score signals. It supports AbuseIPDB for abuse confidence score and Tor
 signals.
 
+By default, SIP parser `INVITE` and `REGISTER` events trigger reputation checks
+immediately. `OPTIONS` parser events must repeat before lookup:
+
+```ini
+SIP_EVENT_METHODS="OPTIONS REGISTER INVITE"
+SIP_EVENT_IMMEDIATE_METHODS="INVITE REGISTER"
+SIP_EVENT_MIN_COUNT=2
+SIP_EVENT_WINDOW=300
+```
+
 Recommended decision order:
 
 ```text
 1. Suricata alert fires.
-2. SIP parser event repeats enough times to cross the local threshold.
-3. Worker extracts source IP from EVE JSON.
-4. Worker skips private, reserved, and allowlisted IPs.
-5. Worker checks local cache.
-6. Worker calls IPQS and/or AbuseIPDB only for unknown/stale IPs.
-7. If bad, worker adds IP to live ipset, deletes conntrack state, and persists it.
-8. If clean, worker caches/logs the checked result.
+2. SIP INVITE or REGISTER parser event fires.
+3. SIP OPTIONS parser event repeats enough times to cross the local threshold.
+4. Worker extracts source IP from EVE JSON.
+5. Worker skips private, reserved, and allowlisted IPs.
+6. Worker checks local cache.
+7. Worker calls IPQS and/or AbuseIPDB only for unknown/stale IPs.
+8. If bad, worker adds IP to live ipset, deletes conntrack state, and persists it.
+9. If clean, worker caches/logs the checked result.
 ```
 
 Suggested block policy:

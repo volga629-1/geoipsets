@@ -51,6 +51,7 @@ class Config:
     check_alerts: bool
     check_sip_events: bool
     sip_event_methods: set[str]
+    sip_event_immediate_methods: set[str]
     sip_event_min_count: int
     sip_event_window: int
     cache_clean_ttl: int
@@ -113,6 +114,7 @@ def load_config() -> Config:
         check_alerts=get_bool("CHECK_ALERTS", "1"),
         check_sip_events=get_bool("CHECK_SIP_EVENTS", "1"),
         sip_event_methods={word.upper() for word in get_words("SIP_EVENT_METHODS", "OPTIONS REGISTER INVITE")},
+        sip_event_immediate_methods={word.upper() for word in get_words("SIP_EVENT_IMMEDIATE_METHODS", "INVITE REGISTER")},
         sip_event_min_count=max(1, get_int("SIP_EVENT_MIN_COUNT", 2)),
         sip_event_window=max(1, get_int("SIP_EVENT_WINDOW", 300)),
         cache_clean_ttl=max(0, get_int("CACHE_CLEAN_TTL", 86400)),
@@ -228,6 +230,9 @@ def is_relevant_event(event: dict[str, Any], cfg: Config) -> tuple[bool, str]:
 
 def event_gate(conn: sqlite3.Connection, ip: str, kind: str, cfg: Config) -> bool:
     if kind.startswith("alert:"):
+        return True
+    if kind.startswith("sip:") and kind.split(":", 1)[1] in cfg.sip_event_immediate_methods:
+        log(f"observed {kind} from {ip}: immediate reputation check")
         return True
 
     now = int(time.time())

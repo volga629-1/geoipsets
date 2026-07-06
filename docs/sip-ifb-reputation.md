@@ -421,6 +421,17 @@ IPQualityScore: proxy, VPN, Tor, recent abuse, bot, and fraud score signals
 AbuseIPDB: abuse confidence score and Tor signal
 ```
 
+By default, SIP parser `INVITE` and `REGISTER` events trigger reputation checks
+immediately. `OPTIONS` parser events must repeat before lookup so scanners do
+not burn API quota too quickly:
+
+```ini
+SIP_EVENT_METHODS="OPTIONS REGISTER INVITE"
+SIP_EVENT_IMMEDIATE_METHODS="INVITE REGISTER"
+SIP_EVENT_MIN_COUNT=2
+SIP_EVENT_WINDOW=300
+```
+
 Recommended worker logic:
 
 ```text
@@ -478,13 +489,13 @@ if IP is already blocked and not expired:
 if one low-confidence SIP event is seen:
   record only
 
-if repeated SIP abuse events are seen within 10 minutes:
+if repeated SIP OPTIONS events are seen within 5 minutes:
   query reputation
 
 if high-confidence SIP rule is seen:
   query reputation immediately
 
-if generic inbound SIP INVITE is seen:
+if SIP INVITE or REGISTER parser event is seen:
   query reputation immediately
 ```
 
