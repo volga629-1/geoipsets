@@ -168,7 +168,7 @@ def init_db(path: Path) -> sqlite3.Connection:
     return conn
 
 
-def load_allowlist(path: Path) -> list[ipaddress._BaseNetwork]:
+def load_network_file(path: Path, label: str) -> list[ipaddress._BaseNetwork]:
     networks: list[ipaddress._BaseNetwork] = []
     if not path.exists():
         return networks
@@ -180,12 +180,24 @@ def load_allowlist(path: Path) -> list[ipaddress._BaseNetwork]:
         try:
             networks.append(ipaddress.ip_network(line, strict=False))
         except ValueError as exc:
-            warn(f"ignored invalid allowlist entry {path}:{line_no}: {exc}")
+            warn(f"ignored invalid {label} entry {path}:{line_no}: {exc}")
     return networks
+
+
+def load_allowlist(path: Path) -> list[ipaddress._BaseNetwork]:
+    return load_network_file(path, "allowlist")
+
+
+def load_learned_blocklist(path: Path) -> list[ipaddress._BaseNetwork]:
+    return load_network_file(path, "learned blocklist")
 
 
 def is_allowed(ip: ipaddress._BaseAddress, allowlist: list[ipaddress._BaseNetwork]) -> bool:
     return any(ip in network for network in allowlist)
+
+
+def is_learned_blocked(ip: ipaddress._BaseAddress, blocklist: list[ipaddress._BaseNetwork]) -> bool:
+    return any(ip in network for network in blocklist)
 
 
 def extract_event(line: str) -> dict[str, Any] | None:
@@ -450,7 +462,13 @@ def enforce(ip_obj: ipaddress._BaseAddress, decision: dict[str, Any], cfg: Confi
     persist_learned(cfg.learned_list, ip, reason, cfg.dry_run)
 
 
-def process_event(event: dict[str, Any], conn: sqlite3.Connection, cfg: Config, allowlist: list[ipaddress._BaseNetwork]) -> None:
+def process_event(
+    event: dict[str, Any],
+    conn: sqlite3.Connection,
+    cfg: Config,
+    allowlist: list[ipaddress._BaseNetwork],
+    learned_blocklist: list[ipaddress._BaseNetwork],
+) -> None:
     src_ip = event.get("src_ip")
     if not isinstance(src_ip, str):
         return
@@ -468,6 +486,18 @@ def process_event(event: dict[str, Any], conn: sqlite3.Connection, cfg: Config, 
     relevant, kind = is_relevant_event(event, cfg)
     if not relevant:
         return
+
+    if is_learned_blocked(ip_obj, learned_blocklist):
+        decision = {
+            "provider": "local",
+            "reason": "learned-blocklist",
+            "score": 100,
+            "decision": "block",
+        }
+        log(f"local learned block for {src_ip}: no reputation API lookup")
+        enforce(ip_obj, decision, cfg)
+        return
+
     if not event_gate(conn, src_ip, kind, cfg):
         return
 
@@ -538,6 +568,7 @@ def main() -> int:
     cfg = load_config()
     conn = init_db(cfg.state_db)
     allowlist = load_allowlist(cfg.allow_list)
+    learned_blocklist = load_learned_blocklist(cfg.learned_list)
 
     log(f"watching {cfg.eve_file}; dry_run={int(cfg.dry_run)}")
 
@@ -553,7 +584,7 @@ def main() -> int:
         event = extract_event(line)
         if event is None:
             continue
-        process_event(event, conn, cfg, allowlist)
+        process_event(event, conn, cfg, allowlist, learned_blocklist)
 
     return 0
 

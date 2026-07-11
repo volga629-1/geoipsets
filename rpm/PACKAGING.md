@@ -146,6 +146,8 @@ checks suspicious SIP sources with local API keys, and promotes confirmed bad
 addresses into `blocked_ipv4` or `blocked_ipv6`. It also deletes active
 conntrack state and appends confirmed blocks to
 `/var/lib/geoipsets/blocklists/learned.list` so they survive refreshes.
+The worker checks `learned.list` before calling any reputation API, so repeat
+offenders are enforced locally without consuming API quota.
 
 Configure local API keys in `/etc/geoipsets-reputation.env`:
 

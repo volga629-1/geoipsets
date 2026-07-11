@@ -368,8 +368,8 @@ The RPM includes a stage-1 local worker:
 ```
 
 The worker reads Suricata EVE JSON alerts and selected SIP parser events, groups
-events by source IP, checks a local SQLite cache first, and only then calls
-local API providers.
+events by source IP, checks local policy first, and only then calls local API
+providers.
 
 Do not call external APIs from packet path rules.
 
@@ -412,7 +412,9 @@ Local state:
 ```
 
 The allow list accepts one IP or CIDR per line and prevents promotion of known
-trusted SIP peers.
+trusted SIP peers. The learned list also accepts one IP or CIDR per line. A
+source already present in `learned.list` is treated as a local block decision
+before any reputation API lookup, so repeat offenders do not consume API quota.
 
 The worker supports:
 
@@ -440,7 +442,8 @@ read Suricata EVE alert
   +-- ignore if event is not a SIP abuse SID
   +-- ignore private/reserved source addresses
   +-- ignore allowlisted source addresses
-  +-- if source IP is already blocked: stop
+  +-- if source IP is in learned.list: enforce local block and stop
+  +-- if source IP is cached as blocked: enforce cached block and stop
   +-- if source IP was checked clean recently: log and stop
   +-- if source IP has repeated suspicious SIP parser events: check reputation
   +-- if source IP creates a Suricata alert: check reputation immediately

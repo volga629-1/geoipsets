@@ -28,11 +28,15 @@ flowchart TD
     F --> G["Suricata IDS"]
     G --> H["EVE JSON alerts/events"]
     H --> I["Reputation worker"]
-    I --> J{"Local cache hit?"}
+    I --> R{"Allowlisted?"}
+    R -->|"yes"| S["Skip"]
+    R -->|"no"| T{"In learned.list?"}
+    T -->|"yes"| N["ipset add blocked_ipv4/blocked_ipv6"]
+    T -->|"no"| J{"Local cache hit?"}
     J -->|"clean/recent"| K["Log checked IP"]
     J -->|"unknown/stale"| L["IP reputation API"]
     L --> M{"VPN/proxy/Tor/abuse?"}
-    M -->|"yes"| N["ipset add blocked_ipv4/blocked_ipv6"]
+    M -->|"yes"| N
     N --> O["conntrack delete active state"]
     N --> P["Append learned blocklist"]
     M -->|"no"| Q["Cache clean/monitor decision"]
@@ -451,6 +455,10 @@ The worker supports IPQualityScore for proxy, VPN, Tor, recent abuse, bot, and
 fraud score signals. It supports AbuseIPDB for abuse confidence score and Tor
 signals.
 
+The local allow list is checked first and always wins. The learned list is
+checked before the SQLite cache and before any reputation API lookup, so
+previously confirmed offenders are enforced locally without spending API quota.
+
 By default, SIP parser `INVITE` and `REGISTER` events trigger reputation checks
 immediately. `OPTIONS` parser events must repeat before lookup:
 
@@ -469,10 +477,11 @@ Recommended decision order:
 3. SIP OPTIONS parser event repeats enough times to cross the local threshold.
 4. Worker extracts source IP from EVE JSON.
 5. Worker skips private, reserved, and allowlisted IPs.
-6. Worker checks local cache.
-7. Worker calls IPQS and/or AbuseIPDB only for unknown/stale IPs.
-8. If bad, worker adds IP to live ipset, deletes conntrack state, and persists it.
-9. If clean, worker caches/logs the checked result.
+6. Worker enforces sources already present in `learned.list` without API lookup.
+7. Worker checks local SQLite cache.
+8. Worker calls IPQS and/or AbuseIPDB only for unknown/stale IPs.
+9. If bad, worker adds IP to live ipset, deletes conntrack state, and persists it.
+10. If clean, worker caches/logs the checked result.
 ```
 
 Suggested block policy:
