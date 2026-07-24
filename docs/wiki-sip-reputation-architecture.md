@@ -193,6 +193,16 @@ The RPM ships local SIP reputation signal rules here:
 
 The local rules include a generic inbound INVITE reputation-check alert. That
 alert triggers API lookup only; IPQS or AbuseIPDB still makes the block decision.
+They also flag long numeric INVITE probes and repeated INVITE sources, which
+catch call setup scans that walk destination numbers on non-default SIP ports.
+
+Make sure Suricata's own `SIP_PORTS` variable includes every mirrored SIP port:
+
+```yaml
+vars:
+  port-groups:
+    SIP_PORTS: "[5060,5061,5084,5086,5087,5088]"
+```
 
 ## Blocklist Sources
 

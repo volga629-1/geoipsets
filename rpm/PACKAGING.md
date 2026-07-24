@@ -170,6 +170,8 @@ The package also ships local Suricata rules under:
 
 Copy or include that file as `local-sip.rules` in the Suricata rules directory,
 then add it to the local rule manager group list.
+Make sure Suricata's `SIP_PORTS` variable includes all mirrored SIP ports,
+for example `5060,5061,5084,5086,5087,5088`.
 
 ## Build locally
 

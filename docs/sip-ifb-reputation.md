@@ -317,6 +317,20 @@ alert. That alert is a trigger for API lookup only; it does not mean the source
 is blocked. The worker blocks only after IPQS or AbuseIPDB confirms proxy, VPN,
 Tor, recent abuse, or a high score.
 
+The local rules also flag long numeric INVITE probes and sources that send many
+INVITEs in a short window. These catch call setup scans that walk destination
+numbers on SIP ports such as `5086`.
+
+Make sure Suricata's own `SIP_PORTS` variable includes every mirrored SIP port.
+The worker environment has its own `SIP_PORTS`, but Suricata rules only match
+ports present in `suricata.yaml`:
+
+```yaml
+vars:
+  port-groups:
+    SIP_PORTS: "[5060,5061,5084,5086,5087,5088]"
+```
+
 If `tc -s filter show dev WAN ingress` shows mirrored packets but Suricata or
 `tcpdump` sees nothing, switch the helper to the dummy backend:
 
