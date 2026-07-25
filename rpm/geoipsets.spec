@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.24.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.25.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -131,6 +131,9 @@ fi
 %dir %{_sharedstatedir}/geoipsets/reputation
 
 %changelog
+* Sat Jul 25 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.25.20260506gitfdc367f
+- Broaden long numeric SIP INVITE probe detection to numeric Contact users.
+
 * Fri Jul 24 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.24.20260506gitfdc367f
 - Detect long numeric SIP INVITE probes and repeated INVITE sources.
 
