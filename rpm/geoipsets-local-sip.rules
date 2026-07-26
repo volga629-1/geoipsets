@@ -6,6 +6,12 @@
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP scanner user-agent"; content:"User-Agent|3a|"; nocase; pcre:"/User-Agent\s*:\s*(friendly-scanner|sipvicious|sipsak|sundayddr|iWar|sipcli|VaxSIPUserAgent|eyeBeam)/Hi"; classtype:attempted-recon; sid:9002001; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP scanner user-agent"; flow:stateless; content:"User-Agent|3a|"; nocase; pcre:"/User-Agent\s*:\s*(friendly-scanner|sipvicious|sipsak|sundayddr|iWar|sipcli|VaxSIPUserAgent|eyeBeam)/Hi"; classtype:attempted-recon; sid:9002002; rev:1;)
 
+alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN scanner user-agent"; content:"User-Agent|3a|"; nocase; content:"TUFAN-Scanner"; nocase; classtype:attempted-recon; sid:9002091; rev:1;)
+alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN scanner user-agent"; flow:stateless; content:"User-Agent|3a|"; nocase; content:"TUFAN-Scanner"; nocase; classtype:attempted-recon; sid:9002092; rev:1;)
+
+alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP file URI probe"; content:"sip:file|3a|///"; nocase; classtype:attempted-recon; sid:9002093; rev:1;)
+alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP file URI probe"; flow:stateless; content:"sip:file|3a|///"; nocase; classtype:attempted-recon; sid:9002094; rev:1;)
+
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP INVITE with private or CGNAT Contact"; content:"INVITE sip:"; nocase; content:"Contact|3a|"; nocase; pcre:"/Contact\s*:\s*.*@(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.64\.)/Hi"; classtype:attempted-recon; sid:9002011; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP INVITE with private or CGNAT Contact"; flow:stateless; content:"INVITE sip:"; nocase; content:"Contact|3a|"; nocase; pcre:"/Contact\s*:\s*.*@(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.64\.)/Hi"; classtype:attempted-recon; sid:9002012; rev:1;)
 

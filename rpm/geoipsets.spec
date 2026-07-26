@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.27.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.28.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -134,6 +134,9 @@ fi
 %dir %{_sharedstatedir}/geoipsets/reputation
 
 %changelog
+* Sun Jul 26 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.28.20260506gitfdc367f
+- Detect TUFAN scanner and SIP file URI probes.
+
 * Sun Jul 26 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.27.20260506gitfdc367f
 - Derive Suricata local SIP rule path from update.yaml during provisioning.
 

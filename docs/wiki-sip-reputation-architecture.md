@@ -198,6 +198,8 @@ The local rules include a generic inbound INVITE reputation-check alert. That
 alert triggers API lookup only; IPQS or AbuseIPDB still makes the block decision.
 They also flag long numeric INVITE probes and repeated INVITE sources, which
 catch call setup scans that walk destination numbers on non-default SIP ports.
+High-confidence scanner patterns such as `TUFAN-Scanner` and SIP `file:///` URI
+probes are also flagged as reputation signals.
 
 Make sure Suricata's own `SIP_PORTS` variable includes every mirrored SIP port:
 
