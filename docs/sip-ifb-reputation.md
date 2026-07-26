@@ -321,8 +321,8 @@ Tor, recent abuse, or a high score.
 The local rules also flag long numeric INVITE probes and sources that send many
 INVITEs in a short window. These catch call setup scans that walk destination
 numbers on SIP ports such as `5086`. High-confidence scanner patterns such as
-`TUFAN-Scanner` and SIP `file:///` URI probes are also flagged as reputation
-signals.
+`TUFAN-Scanner`, SIP `file:///` URI probes, and SIP `../` path traversal probes
+including `%00/../` variants are also flagged as reputation signals.
 
 Make sure Suricata's own `SIP_PORTS` variable includes every mirrored SIP port.
 The worker environment has its own `SIP_PORTS`, but Suricata rules only match

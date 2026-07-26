@@ -12,6 +12,9 @@ alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN sc
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP file URI probe"; content:"sip:file|3a|///"; nocase; classtype:attempted-recon; sid:9002093; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP file URI probe"; flow:stateless; content:"sip:file|3a|///"; nocase; classtype:attempted-recon; sid:9002094; rev:1;)
 
+alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP path traversal URI probe"; content:"sip|3a|"; nocase; content:"../"; pcre:"/sip:(%00\/)?(\.\.\/)+/i"; classtype:attempted-recon; sid:9002095; rev:1;)
+alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP path traversal URI probe"; flow:stateless; content:"sip|3a|"; nocase; content:"../"; pcre:"/sip:(%00\/)?(\.\.\/)+/i"; classtype:attempted-recon; sid:9002096; rev:1;)
+
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP INVITE with private or CGNAT Contact"; content:"INVITE sip:"; nocase; content:"Contact|3a|"; nocase; pcre:"/Contact\s*:\s*.*@(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.64\.)/Hi"; classtype:attempted-recon; sid:9002011; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP INVITE with private or CGNAT Contact"; flow:stateless; content:"INVITE sip:"; nocase; content:"Contact|3a|"; nocase; pcre:"/Contact\s*:\s*.*@(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.64\.)/Hi"; classtype:attempted-recon; sid:9002012; rev:1;)
 
