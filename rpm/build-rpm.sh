@@ -37,6 +37,7 @@ install -pm 0640 "${repo_root}/rpm/geoipsets-reputation.env" "${source_dir}/geoi
 install -pm 0755 "${repo_root}/rpm/geoipsets-reputation-worker" "${source_dir}/geoipsets-reputation-worker"
 install -pm 0644 "${repo_root}/rpm/geoipsets-reputation-worker.service" "${source_dir}/geoipsets-reputation-worker.service"
 install -pm 0644 "${repo_root}/rpm/geoipsets-local-sip.rules" "${source_dir}/geoipsets-local-sip.rules"
+install -pm 0755 "${repo_root}/rpm/geoipsets-provision-sip-suricata" "${source_dir}/geoipsets-provision-sip-suricata"
 install -pm 0644 "${spec}" "${spec_dir}/geoipsets.spec"
 
 rpmbuild -ba "${spec_dir}/geoipsets.spec" \

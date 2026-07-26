@@ -87,6 +87,7 @@ install -pm 0640 rpm/geoipsets-reputation.env "${sources_dir}/geoipsets-reputati
 install -pm 0755 rpm/geoipsets-reputation-worker "${sources_dir}/geoipsets-reputation-worker"
 install -pm 0644 rpm/geoipsets-reputation-worker.service "${sources_dir}/geoipsets-reputation-worker.service"
 install -pm 0644 rpm/geoipsets-local-sip.rules "${sources_dir}/geoipsets-local-sip.rules"
+install -pm 0755 rpm/geoipsets-provision-sip-suricata "${sources_dir}/geoipsets-provision-sip-suricata"
 ```
 
 Copy the spec into `~/rpmbuild/SPECS`:

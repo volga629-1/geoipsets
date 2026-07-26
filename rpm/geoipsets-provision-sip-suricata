@@ -1,0 +1,196 @@
+#!/usr/bin/bash
+set -euo pipefail
+
+suricata_yaml="${SURICATA_YAML:-/etc/suricata/suricata.yaml}"
+rules_src="${RULES_SRC:-/usr/share/geoipsets/suricata/local-sip.rules}"
+rules_dst="${RULES_DST:-/var/lib/suricata/rules/local-sip.rules}"
+rules_bundle="${RULES_BUNDLE:-/var/lib/suricata/rules/suricata.rules}"
+ports="${SIP_PORTS:-5060 5061 5084 5086 5087 5088}"
+mirror=false
+update_rules=true
+test_config=true
+reload_suricata=false
+
+usage() {
+    cat >&2 <<EOF
+Usage: ${0##*/} [OPTIONS]
+
+Install geoipsets local Suricata SIP rules and optionally restart the local
+mirror interface.
+
+Options:
+  --mirror              Restart geoipsets-ifbctl after installing rules
+  --reload             Reload Suricata after successful update/test
+  --no-update          Do not run suricata-update
+  --no-test            Do not run suricata -T
+  --help, -h           Show this help
+
+Environment:
+  SIP_PORTS            Space-separated SIP ports. Default: ${ports}
+  SURICATA_YAML        Suricata config path. Default: ${suricata_yaml}
+  RULES_SRC            Source rule file. Default: ${rules_src}
+  RULES_DST            Destination rule file. Default: ${rules_dst}
+  RULES_BUNDLE         Merged rules file. Default: ${rules_bundle}
+  WAN_IF               Passed to geoipsets-ifbctl when --mirror is used
+  MIRROR_IF            Passed to geoipsets-ifbctl when --mirror is used
+  MIRROR_TYPE          Passed to geoipsets-ifbctl when --mirror is used
+  MIRROR_QLEN          Passed to geoipsets-ifbctl when --mirror is used
+EOF
+}
+
+while (( $# > 0 )); do
+    case "$1" in
+        --mirror)
+            mirror=true
+            ;;
+        --reload)
+            reload_suricata=true
+            ;;
+        --no-update)
+            update_rules=false
+            ;;
+        --no-test)
+            test_config=false
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "ERROR: unknown option: $1" >&2
+            usage
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+require_root() {
+    if (( EUID != 0 )); then
+        echo "ERROR: ${0##*/} must run as root" >&2
+        exit 1
+    fi
+}
+
+has_command() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+print_sip_ports_hint() {
+    cat >&2 <<EOF
+WARNING: could not verify all SIP ports in ${suricata_yaml}.
+Make sure Suricata has the same SIP_PORTS used by the mirror and worker:
+
+vars:
+  port-groups:
+    SIP_PORTS: "[5060,5061,5084,5086,5087,5088]"
+EOF
+}
+
+verify_sip_ports() {
+    local missing=0
+    local port
+
+    if [[ ! -f "${suricata_yaml}" ]]; then
+        echo "WARNING: missing Suricata config: ${suricata_yaml}" >&2
+        return 0
+    fi
+
+    for port in ${ports}; do
+        if ! grep -Eq "(^|[^0-9])${port}([^0-9]|$)" "${suricata_yaml}"; then
+            missing=1
+        fi
+    done
+
+    (( missing == 0 )) || print_sip_ports_hint
+}
+
+install_local_rules() {
+    if [[ ! -f "${rules_src}" ]]; then
+        echo "ERROR: missing local SIP rules source: ${rules_src}" >&2
+        exit 1
+    fi
+
+    install -Dpm 0644 "${rules_src}" "${rules_dst}"
+    echo "Installed ${rules_dst}"
+}
+
+run_suricata_update() {
+    if ! has_command suricata-update; then
+        echo "WARNING: suricata-update not found; copy was completed but rules were not rebuilt" >&2
+        return 0
+    fi
+
+    suricata-update
+}
+
+verify_merged_rules() {
+    if [[ ! -f "${rules_bundle}" ]]; then
+        echo "WARNING: merged Suricata rules not found: ${rules_bundle}" >&2
+        return 0
+    fi
+
+    if ! grep -q "GEOIPSETS SIP" "${rules_bundle}"; then
+        echo "WARNING: ${rules_bundle} does not contain GEOIPSETS SIP rules; check update.yaml local rule paths" >&2
+    fi
+
+    if ! grep -q "ET DROP Dshield" "${rules_bundle}"; then
+        echo "WARNING: ${rules_bundle} does not contain ET DShield rules; enable emerging-dshield.rules if desired" >&2
+    fi
+}
+
+test_suricata_config() {
+    if ! has_command suricata; then
+        echo "WARNING: suricata not found; skipped config test" >&2
+        return 0
+    fi
+
+    suricata -T -c "${suricata_yaml}"
+}
+
+reload_suricata_service() {
+    if ! has_command systemctl; then
+        echo "WARNING: systemctl not found; skipped Suricata reload" >&2
+        return 0
+    fi
+
+    systemctl reload suricata.service || systemctl restart suricata.service
+}
+
+restart_mirror() {
+    if ! has_command geoipsets-ifbctl; then
+        echo "ERROR: geoipsets-ifbctl not found" >&2
+        exit 1
+    fi
+
+    env \
+        SIP_PORTS="${ports}" \
+        WAN_IF="${WAN_IF:-}" \
+        MIRROR_IF="${MIRROR_IF:-ifb-sip0}" \
+        MIRROR_TYPE="${MIRROR_TYPE:-dummy}" \
+        MIRROR_QLEN="${MIRROR_QLEN:-10000}" \
+        geoipsets-ifbctl restart
+}
+
+require_root
+install_local_rules
+verify_sip_ports
+
+if [[ "${update_rules}" == true ]]; then
+    run_suricata_update
+    verify_merged_rules
+fi
+
+if [[ "${test_config}" == true ]]; then
+    test_suricata_config
+fi
+
+if [[ "${mirror}" == true ]]; then
+    restart_mirror
+fi
+
+if [[ "${reload_suricata}" == true ]]; then
+    reload_suricata_service
+fi
+
+echo "geoipsets SIP Suricata provisioning completed"

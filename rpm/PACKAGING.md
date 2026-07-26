@@ -38,6 +38,7 @@ snapshot globals, and switch `Release` to `1%{?dist}`.
 - `/usr/libexec/geoipsets/update-all`: runs the full refresh sequence for systemd
 - `/usr/libexec/geoipsets/reputation-worker`: reads Suricata EVE and promotes bad SIP sources
 - `/usr/sbin/geoipsets-ifbctl`: optional SIP mirror helper for Suricata
+- `/usr/sbin/geoipsets-provision-sip-suricata`: installs local Suricata rules and optionally calls `geoipsets-ifbctl`
 - `/etc/geoipsets-reputation.env`: local reputation API and policy configuration
 - `/usr/lib/systemd/system/geoipsets-reputation-worker.service`: optional local reputation worker
 - `/usr/share/geoipsets/suricata/local-sip.rules`: local SIP rules for reputation signals
@@ -91,7 +92,8 @@ For example:
 ```
 
 Dynamic abuse feeds are configured in `/etc/geoipsets.blocklist-feeds.conf`
-using foomuri-style `iplist` entries:
+using foomuri-style `iplist` entries. Most feeds use the generic parser. Feeds
+with special formats can specify a parser after the URL:
 
 ```text
 iplist {
@@ -105,8 +107,12 @@ iplist {
     @spamhausdropv6 https://www.spamhaus.org/drop/dropv6.txt
     @blocklist_net_ua https://iplists.firehol.org/files/blocklist_net_ua.ipset
     @abuseipdb https://raw.githubusercontent.com/borestad/blocklist-abuseipdb/main/abuseipdb-s100-14d.ipv4
+    @dshield https://feeds.dshield.org/feeds/block.txt dshield
 }
 ```
+
+The `dshield` parser converts the SANS ISC/DShield tabular range feed into CIDR
+entries such as `64.62.197.0/24`.
 
 Only put block feeds in this file. Country allowlists such as `@ipv4_CA` and
 `@ipv4_US` belong in geo policy sets, not in the blocklist feed config.
@@ -168,10 +174,23 @@ The package also ships local Suricata rules under:
 /usr/share/geoipsets/suricata/local-sip.rules
 ```
 
-Copy or include that file as `local-sip.rules` in the Suricata rules directory,
-then add it to the local rule manager group list.
+Copy or include that file as `local-sip.rules` in the Suricata rules directory.
+Suricata Update should include local files through `update.yaml`, for example
+`/var/lib/suricata/rules/*.rules`.
 Make sure Suricata's `SIP_PORTS` variable includes all mirrored SIP ports,
 for example `5060,5061,5084,5086,5087,5088`.
+
+The package includes a provisioning helper for repeatable Suricata setup:
+
+```bash
+sudo /usr/sbin/geoipsets-provision-sip-suricata
+sudo WAN_IF="ens18" SIP_PORTS="5060 5061 5084 5086 5087 5088" /usr/sbin/geoipsets-provision-sip-suricata --mirror --reload
+```
+
+The helper installs the packaged local rules, warns if Suricata's `SIP_PORTS`
+does not appear to contain the mirrored ports, runs `suricata-update`, and tests
+the Suricata config. With `--mirror`, it calls `geoipsets-ifbctl restart`; it
+does not implement mirror setup itself.
 
 ## Build locally
 

@@ -178,7 +178,6 @@ emerging-exploit.rules
 emerging-malware.rules
 emerging-worm.rules
 tor.rules
-local-sip.rules
 classtype: trojan-activity
 ```
 
@@ -190,6 +189,10 @@ The RPM ships local SIP reputation signal rules here:
 ```text
 /usr/share/geoipsets/suricata/local-sip.rules
 ```
+
+Install that file into the Suricata local rules directory. Suricata Update
+should include local files through `update.yaml`, for example
+`/var/lib/suricata/rules/*.rules`.
 
 The local rules include a generic inbound INVITE reputation-check alert. That
 alert triggers API lookup only; IPQS or AbuseIPDB still makes the block decision.
@@ -203,6 +206,18 @@ vars:
   port-groups:
     SIP_PORTS: "[5060,5061,5084,5086,5087,5088]"
 ```
+
+For repeatable provisioning:
+
+```bash
+geoipsets-provision-sip-suricata
+WAN_IF=ens3 SIP_PORTS="5060 5061 5084 5086 5087 5088" geoipsets-provision-sip-suricata --mirror --reload
+```
+
+The provisioning helper installs the packaged local rules, runs
+`suricata-update`, tests the Suricata configuration, and optionally calls
+`geoipsets-ifbctl restart`. `geoipsets-ifbctl` remains the only helper that owns
+dummy/IFB and `tc` mirror setup.
 
 ## Blocklist Sources
 
@@ -223,6 +238,15 @@ Dynamic public feed config:
 ```text
 /etc/geoipsets.blocklist-feeds.conf
 ```
+
+The default dynamic feed config includes DShield using an explicit parser:
+
+```text
+@dshield https://feeds.dshield.org/feeds/block.txt dshield
+```
+
+The `dshield` parser converts the SANS ISC/DShield tabular range feed into CIDR
+entries such as `64.62.197.0/24`.
 
 Fetched dynamic feeds:
 

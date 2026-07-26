@@ -293,8 +293,10 @@ The RPM ships local SIP reputation signal rules here:
 /usr/share/geoipsets/suricata/local-sip.rules
 ```
 
-Copy or include that file as `local-sip.rules` in the Suricata rules directory,
-then add it to the local Suricata rule group list:
+Copy or include that file as `local-sip.rules` in the Suricata rules directory.
+Suricata Update should include local rule files through `update.yaml`, for
+example `/var/lib/suricata/rules/*.rules`. Keep the rule manager group list for
+ET/open groups such as:
 
 ```text
 group:emerging-dshield.rules
@@ -305,7 +307,6 @@ group:emerging-dos.rules
 group:emerging-malware.rules
 group:emerging-worm.rules
 group:tor.rules
-group:local-sip.rules
 classtype:trojan-activity
 ```
 
@@ -330,6 +331,18 @@ vars:
   port-groups:
     SIP_PORTS: "[5060,5061,5084,5086,5087,5088]"
 ```
+
+For repeatable setup, use the packaged provisioning helper:
+
+```bash
+geoipsets-provision-sip-suricata
+WAN_IF=ens3 SIP_PORTS="5060 5061 5084 5086 5087 5088" geoipsets-provision-sip-suricata --mirror --reload
+```
+
+The helper installs the packaged local rules, runs `suricata-update`, tests the
+Suricata configuration, and optionally calls `geoipsets-ifbctl restart` when
+`--mirror` is used. `geoipsets-ifbctl` remains the owner of dummy/IFB interface
+and `tc` filter setup.
 
 If `tc -s filter show dev WAN ingress` shows mirrored packets but Suricata or
 `tcpdump` sees nothing, switch the helper to the dummy backend:

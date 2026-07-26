@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.25.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.26.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -25,6 +25,7 @@ Source12:       geoipsets-reputation.env
 Source13:       geoipsets-reputation-worker
 Source14:       geoipsets-reputation-worker.service
 Source15:       geoipsets-local-sip.rules
+Source16:       geoipsets-provision-sip-suricata
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
@@ -76,6 +77,7 @@ install -Dpm 0640 %{SOURCE12} %{buildroot}%{_sysconfdir}/geoipsets-reputation.en
 install -Dpm 0755 %{SOURCE13} %{buildroot}%{_libexecdir}/geoipsets/reputation-worker
 install -Dpm 0644 %{SOURCE14} %{buildroot}%{_unitdir}/geoipsets-reputation-worker.service
 install -Dpm 0644 %{SOURCE15} %{buildroot}%{_datadir}/geoipsets/suricata/local-sip.rules
+install -Dpm 0755 %{SOURCE16} %{buildroot}%{_sbindir}/geoipsets-provision-sip-suricata
 install -dpm 0755 %{buildroot}%{_sysconfdir}/geoipsets.blocklist.d
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets/blocklists
@@ -113,6 +115,7 @@ fi
 %dir %{_sysconfdir}/geoipsets.blocklist.d
 %{_bindir}/geoipsets
 %{_sbindir}/geoipsets-ifbctl
+%{_sbindir}/geoipsets-provision-sip-suricata
 %{_libexecdir}/geoipsets/refresh-ipset
 %{_libexecdir}/geoipsets/refresh-blocklist
 %{_libexecdir}/geoipsets/fetch-blocklists
@@ -131,6 +134,9 @@ fi
 %dir %{_sharedstatedir}/geoipsets/reputation
 
 %changelog
+* Sat Jul 25 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.26.20260506gitfdc367f
+- Add DShield feed parser and SIP Suricata provisioning helper.
+
 * Sat Jul 25 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.25.20260506gitfdc367f
 - Broaden long numeric SIP INVITE probe detection to numeric Contact users.
 
