@@ -187,10 +187,12 @@ sudo /usr/sbin/geoipsets-provision-sip-suricata
 sudo WAN_IF="ens18" SIP_PORTS="5060 5061 5084 5086 5087 5088" /usr/sbin/geoipsets-provision-sip-suricata --mirror --reload
 ```
 
-The helper installs the packaged local rules, warns if Suricata's `SIP_PORTS`
-does not appear to contain the mirrored ports, runs `suricata-update`, and tests
-the Suricata config. With `--mirror`, it calls `geoipsets-ifbctl restart`; it
-does not implement mirror setup itself.
+The helper reads `/etc/suricata/update.yaml` to derive where local rules should
+be installed. `RULES_DST` is only an override. The helper warns if Suricata's
+`SIP_PORTS` does not appear to contain the mirrored ports, runs
+`suricata-update -c /etc/suricata/update.yaml`, and tests the Suricata config.
+With `--mirror`, it calls `geoipsets-ifbctl restart`; it does not implement
+mirror setup itself.
 
 ## Build locally
 

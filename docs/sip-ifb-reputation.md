@@ -341,8 +341,10 @@ WAN_IF=ens3 SIP_PORTS="5060 5061 5084 5086 5087 5088" geoipsets-provision-sip-su
 
 The helper installs the packaged local rules, runs `suricata-update`, tests the
 Suricata configuration, and optionally calls `geoipsets-ifbctl restart` when
-`--mirror` is used. `geoipsets-ifbctl` remains the owner of dummy/IFB interface
-and `tc` filter setup.
+`--mirror` is used. It reads `/etc/suricata/update.yaml` to derive the local
+rule destination, so the Suricata Update local rule policy remains the source of
+truth. `RULES_DST` is available only as an override. `geoipsets-ifbctl` remains
+the owner of dummy/IFB interface and `tc` filter setup.
 
 If `tc -s filter show dev WAN ingress` shows mirrored packets but Suricata or
 `tcpdump` sees nothing, switch the helper to the dummy backend:

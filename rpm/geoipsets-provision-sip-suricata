@@ -2,8 +2,9 @@
 set -euo pipefail
 
 suricata_yaml="${SURICATA_YAML:-/etc/suricata/suricata.yaml}"
+update_yaml="${SURICATA_UPDATE_YAML:-/etc/suricata/update.yaml}"
 rules_src="${RULES_SRC:-/usr/share/geoipsets/suricata/local-sip.rules}"
-rules_dst="${RULES_DST:-/var/lib/suricata/rules/local-sip.rules}"
+rules_dst="${RULES_DST:-}"
 rules_bundle="${RULES_BUNDLE:-/var/lib/suricata/rules/suricata.rules}"
 ports="${SIP_PORTS:-5060 5061 5084 5086 5087 5088}"
 mirror=false
@@ -28,8 +29,10 @@ Options:
 Environment:
   SIP_PORTS            Space-separated SIP ports. Default: ${ports}
   SURICATA_YAML        Suricata config path. Default: ${suricata_yaml}
+  SURICATA_UPDATE_YAML Suricata Update config path. Default: ${update_yaml}
   RULES_SRC            Source rule file. Default: ${rules_src}
-  RULES_DST            Destination rule file. Default: ${rules_dst}
+  RULES_DST            Destination rule file override. If unset, derive from
+                       SURICATA_UPDATE_YAML local rule paths.
   RULES_BUNDLE         Merged rules file. Default: ${rules_bundle}
   WAN_IF               Passed to geoipsets-ifbctl when --mirror is used
   MIRROR_IF            Passed to geoipsets-ifbctl when --mirror is used
@@ -76,6 +79,69 @@ has_command() {
     command -v "$1" >/dev/null 2>&1
 }
 
+derive_rules_dst_from_update_yaml() {
+    if [[ ! -f "${update_yaml}" ]]; then
+        return 1
+    fi
+
+    awk '
+        function trim(value) {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            return value
+        }
+
+        /^local:[[:space:]]*$/ {
+            in_local = 1
+            next
+        }
+
+        in_local && /^[^[:space:]#][^:]*:[[:space:]]*/ {
+            exit
+        }
+
+        in_local {
+            line = $0
+            sub(/[[:space:]]+#.*/, "", line)
+            sub(/^[[:space:]]*-[[:space:]]*/, "", line)
+            line = trim(line)
+            gsub(/^["'\'']|["'\'']$/, "", line)
+            if (line == "") {
+                next
+            }
+
+            if (line ~ /(^|\/)local-sip\.rules$/) {
+                print line
+                exit
+            }
+            if (line ~ /\/\*\.rules$/) {
+                sub(/\/\*\.rules$/, "/local-sip.rules", line)
+                print line
+                exit
+            }
+            if (line !~ /\.rules$/) {
+                sub(/\/$/, "", line)
+                print line "/local-sip.rules"
+                exit
+            }
+        }
+    ' "${update_yaml}"
+}
+
+resolve_rules_dst() {
+    if [[ -n "${rules_dst}" ]]; then
+        return 0
+    fi
+
+    rules_dst="$(derive_rules_dst_from_update_yaml || true)"
+
+    if [[ -z "${rules_dst}" ]]; then
+        rules_dst="/var/lib/suricata/rules/local-sip.rules"
+        echo "WARNING: could not derive local rule path from ${update_yaml}; using ${rules_dst}" >&2
+    else
+        echo "Using local rule path from ${update_yaml}: ${rules_dst}"
+    fi
+}
+
 print_sip_ports_hint() {
     cat >&2 <<EOF
 WARNING: could not verify all SIP ports in ${suricata_yaml}.
@@ -111,6 +177,7 @@ install_local_rules() {
         exit 1
     fi
 
+    resolve_rules_dst
     install -Dpm 0644 "${rules_src}" "${rules_dst}"
     echo "Installed ${rules_dst}"
 }
@@ -121,7 +188,12 @@ run_suricata_update() {
         return 0
     fi
 
-    suricata-update
+    if [[ -f "${update_yaml}" ]]; then
+        suricata-update -c "${update_yaml}"
+    else
+        echo "WARNING: missing Suricata Update config: ${update_yaml}; using suricata-update defaults" >&2
+        suricata-update
+    fi
 }
 
 verify_merged_rules() {

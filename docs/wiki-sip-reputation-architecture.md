@@ -216,8 +216,11 @@ WAN_IF=ens3 SIP_PORTS="5060 5061 5084 5086 5087 5088" geoipsets-provision-sip-su
 
 The provisioning helper installs the packaged local rules, runs
 `suricata-update`, tests the Suricata configuration, and optionally calls
-`geoipsets-ifbctl restart`. `geoipsets-ifbctl` remains the only helper that owns
-dummy/IFB and `tc` mirror setup.
+`geoipsets-ifbctl restart`. It reads `/etc/suricata/update.yaml` to derive the
+local rule destination, so the Suricata Update local rule policy remains the
+source of truth. `RULES_DST` is available only as an override.
+`geoipsets-ifbctl` remains the only helper that owns dummy/IFB and `tc` mirror
+setup.
 
 ## Blocklist Sources
 
