@@ -9,6 +9,9 @@ alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP scanner 
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN scanner user-agent"; content:"User-Agent|3a|"; nocase; content:"TUFAN-Scanner"; nocase; classtype:attempted-recon; sid:9002091; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN scanner user-agent"; flow:stateless; content:"User-Agent|3a|"; nocase; content:"TUFAN-Scanner"; nocase; classtype:attempted-recon; sid:9002092; rev:1;)
 
+alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN SDP call marker"; content:"INVITE sip:"; nocase; content:"s=TUFAN Call"; nocase; classtype:attempted-recon; sid:9002097; rev:1;)
+alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN SDP call marker"; flow:stateless; content:"INVITE sip:"; nocase; content:"s=TUFAN Call"; nocase; classtype:attempted-recon; sid:9002098; rev:1;)
+
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP file URI probe"; content:"sip:file|3a|///"; nocase; classtype:attempted-recon; sid:9002093; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP file URI probe"; flow:stateless; content:"sip:file|3a|///"; nocase; classtype:attempted-recon; sid:9002094; rev:1;)
 

@@ -325,7 +325,9 @@ The local rules also flag long numeric INVITE probes and sources that send many
 INVITEs in a short window. These catch call setup scans that walk destination
 numbers on SIP ports such as `5086`. High-confidence scanner patterns such as
 `TUFAN-Scanner`, SIP `file:///` URI probes, and SIP `../` path traversal probes
-including `%00/../` variants are also flagged as reputation signals.
+including `%00/../` variants are also flagged as reputation signals. Some TUFAN
+traffic spoofs normal SIP phones in `User-Agent`, so local rules also match the
+`s=TUFAN Call` SDP marker.
 
 Make sure Suricata's own `SIP_PORTS` variable includes every mirrored SIP port.
 The worker environment has its own `SIP_PORTS`, but Suricata rules only match
@@ -459,6 +461,8 @@ systemctl restart geoipsets-reputation-worker.service
 Ignored records include the reason, such as `port-not-sip`,
 `sip-options-not-numeric-extension`, `source-not-global`, or an unsupported SIP
 method. Turn `LOG_IGNORED_EVENTS` off after troubleshooting to avoid noisy logs.
+If a relevant source is already present in `blocked_ipv4` or `blocked_ipv6`, the
+worker logs `event=already_blocked` and skips reputation API lookup.
 
 The packaged service joins the `suricata` supplementary group so it can read
 `/var/log/suricata/eve.json` while still running with a reduced capability set.

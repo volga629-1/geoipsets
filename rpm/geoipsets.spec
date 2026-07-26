@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.30.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.31.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -134,6 +134,9 @@ fi
 %dir %{_sharedstatedir}/geoipsets/reputation
 
 %changelog
+* Sun Jul 26 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.31.20260506gitfdc367f
+- Detect TUFAN SDP call markers and log already-blocked reputation events.
+
 * Sun Jul 26 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.30.20260506gitfdc367f
 - Add structured reputation worker journal logs and JSONL decision collector.
 

@@ -168,6 +168,8 @@ For troubleshooting, set `LOG_IGNORED_EVENTS=1` in an override or in
 `/etc/geoipsets-reputation.env`. This shows why EVE records were ignored, such
 as non-SIP ports, private sources, unsupported SIP methods, or OPTIONS requests
 that are not numeric-extension probes.
+Relevant sources that are already present in `blocked_ipv4` or `blocked_ipv6`
+are logged as `event=already_blocked` and do not consume reputation API quota.
 
 Then enable the worker:
 

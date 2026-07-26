@@ -339,6 +339,7 @@ def log_ignored_event(cfg: Config, event: dict[str, Any], reason: str) -> None:
 
 def event_gate(conn: sqlite3.Connection, ip: str, kind: str, cfg: Config) -> bool:
     if kind.startswith("alert:"):
+        audit("info", "event_observed", "Suricata alert observed", ip=ip, kind=kind, action="check")
         return True
     if kind.startswith("sip:") and kind.split(":", 1)[1] in cfg.sip_event_immediate_methods:
         audit("info", "event_observed", "immediate reputation check", ip=ip, kind=kind, action="check")
@@ -576,6 +577,33 @@ def run_command(command: list[str], dry_run: bool) -> None:
     subprocess.run(command, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def ipset_contains(ip_obj: ipaddress._BaseAddress, cfg: Config) -> bool:
+    if cfg.dry_run:
+        return False
+    ip = str(ip_obj)
+    set_name = cfg.block_ipv4_set if ip_obj.version == 4 else cfg.block_ipv6_set
+    result = subprocess.run(
+        ["ipset", "test", set_name, ip],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def log_already_blocked(ip_obj: ipaddress._BaseAddress, cfg: Config, kind: str) -> None:
+    set_name = cfg.block_ipv4_set if ip_obj.version == 4 else cfg.block_ipv6_set
+    audit(
+        "info",
+        "already_blocked",
+        "source already present in blocked ipset; skipping reputation API",
+        ip=str(ip_obj),
+        kind=kind,
+        ipset=set_name,
+        action="skip-api",
+    )
+
+
 def enforce(ip_obj: ipaddress._BaseAddress, decision: dict[str, Any], cfg: Config) -> None:
     ip = str(ip_obj)
     set_name = cfg.block_ipv4_set if ip_obj.version == 4 else cfg.block_ipv6_set
@@ -625,6 +653,10 @@ def process_event(
     relevant, kind = is_relevant_event(event, cfg)
     if not relevant:
         log_ignored_event(cfg, event, kind)
+        return
+
+    if ipset_contains(ip_obj, cfg):
+        log_already_blocked(ip_obj, cfg, kind)
         return
 
     if is_learned_blocked(ip_obj, learned_blocklist):
