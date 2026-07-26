@@ -23,14 +23,74 @@ from typing import Any
 
 
 RUNNING = True
+LOGGER: "EventLogger | None" = None
 
 
 def log(message: str) -> None:
+    if LOGGER is not None:
+        LOGGER.emit("info", "message", message)
+        return
     print(message, flush=True)
 
 
 def warn(message: str) -> None:
+    if LOGGER is not None:
+        LOGGER.emit("warning", "warning", message)
+        return
     print(f"WARNING: {message}", file=sys.stderr, flush=True)
+
+
+class EventLogger:
+    def __init__(self, log_file: Path | None, journal_format: str) -> None:
+        self.log_file = log_file
+        self.journal_format = journal_format
+
+    def emit(self, level: str, event: str, message: str, **fields: Any) -> None:
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        record: dict[str, Any] = {
+            "ts": now,
+            "level": level,
+            "event": event,
+            "message": message,
+        }
+        for key, value in fields.items():
+            if value is None:
+                continue
+            record[key] = value
+
+        if self.journal_format == "json":
+            line = json.dumps(record, sort_keys=True, separators=(",", ":"))
+        else:
+            line = self.format_kv(record)
+
+        stream = sys.stderr if level in {"warning", "error"} else sys.stdout
+        print(line, file=stream, flush=True)
+
+        if self.log_file is not None:
+            try:
+                self.log_file.parent.mkdir(parents=True, exist_ok=True)
+                with self.log_file.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n")
+            except OSError as exc:
+                print(f"WARNING: failed to write reputation log {self.log_file}: {exc}", file=sys.stderr, flush=True)
+
+    @staticmethod
+    def format_kv(record: dict[str, Any]) -> str:
+        parts: list[str] = []
+        for key, value in record.items():
+            rendered = str(value)
+            if re.search(r"\s|[\"'=]", rendered):
+                rendered = shlex.quote(rendered)
+            parts.append(f"{key}={rendered}")
+        return " ".join(parts)
+
+
+def audit(level: str, event: str, message: str, **fields: Any) -> None:
+    if LOGGER is not None:
+        LOGGER.emit(level, event, message, **fields)
+        return
+    prefix = "WARNING: " if level in {"warning", "error"} else ""
+    print(prefix + message, file=sys.stderr if level in {"warning", "error"} else sys.stdout, flush=True)
 
 
 def handle_signal(signum: int, _frame: Any) -> None:
@@ -69,6 +129,10 @@ class Config:
     abuseipdb_api_key: str
     abuseipdb_max_age_days: int
     abuseipdb_confidence_threshold: int
+    reputation_log_file: Path | None
+    reputation_log_format: str
+    log_ignored_events: bool
+    log_clean_events: bool
 
 
 def get_bool(name: str, default: str = "0") -> bool:
@@ -103,6 +167,12 @@ def load_config() -> Config:
         if 1 <= parsed <= 65535:
             ports.add(parsed)
 
+    log_file_raw = os.environ.get("REPUTATION_LOG_FILE", "/var/lib/geoipsets/reputation/events.jsonl").strip()
+    log_format = os.environ.get("REPUTATION_LOG_FORMAT", "kv").strip().lower()
+    if log_format not in {"kv", "json"}:
+        warn(f"REPUTATION_LOG_FORMAT={log_format!r} is invalid; using kv")
+        log_format = "kv"
+
     return Config(
         eve_file=Path(os.environ.get("EVE_FILE", "/var/log/suricata/eve.json")),
         state_db=Path(os.environ.get("STATE_DB", "/var/lib/geoipsets/reputation/reputation.sqlite")),
@@ -132,6 +202,10 @@ def load_config() -> Config:
         abuseipdb_api_key=os.environ.get("ABUSEIPDB_API_KEY", "").strip(),
         abuseipdb_max_age_days=max(1, get_int("ABUSEIPDB_MAX_AGE_DAYS", 90)),
         abuseipdb_confidence_threshold=max(0, get_int("ABUSEIPDB_CONFIDENCE_THRESHOLD", 90)),
+        reputation_log_file=Path(log_file_raw) if log_file_raw else None,
+        reputation_log_format=log_format,
+        log_ignored_events=get_bool("LOG_IGNORED_EVENTS", "0"),
+        log_clean_events=get_bool("LOG_CLEAN_EVENTS", "1"),
     )
 
 
@@ -240,11 +314,34 @@ def is_relevant_event(event: dict[str, Any], cfg: Config) -> tuple[bool, str]:
     return False, event_type or "unknown"
 
 
+def event_summary(event: dict[str, Any]) -> dict[str, Any]:
+    alert = event.get("alert") if isinstance(event.get("alert"), dict) else {}
+    sip = event.get("sip") if isinstance(event.get("sip"), dict) else {}
+    return {
+        "src_ip": event.get("src_ip"),
+        "src_port": event.get("src_port"),
+        "dest_ip": event.get("dest_ip"),
+        "dest_port": event.get("dest_port"),
+        "proto": event.get("proto"),
+        "eve_type": event.get("event_type"),
+        "signature_id": alert.get("signature_id"),
+        "signature": alert.get("signature"),
+        "sip_method": sip.get("method"),
+        "sip_uri": sip.get("uri"),
+    }
+
+
+def log_ignored_event(cfg: Config, event: dict[str, Any], reason: str) -> None:
+    if not cfg.log_ignored_events:
+        return
+    audit("info", "event_ignored", "ignored EVE event", reason=reason, **event_summary(event))
+
+
 def event_gate(conn: sqlite3.Connection, ip: str, kind: str, cfg: Config) -> bool:
     if kind.startswith("alert:"):
         return True
     if kind.startswith("sip:") and kind.split(":", 1)[1] in cfg.sip_event_immediate_methods:
-        log(f"observed {kind} from {ip}: immediate reputation check")
+        audit("info", "event_observed", "immediate reputation check", ip=ip, kind=kind, action="check")
         return True
 
     now = int(time.time())
@@ -255,13 +352,31 @@ def event_gate(conn: sqlite3.Connection, ip: str, kind: str, cfg: Config) -> boo
             (ip, kind, now, now, 1),
         )
         conn.commit()
-        log(f"observed {kind} from {ip}: count=1/{cfg.sip_event_min_count}")
+        audit(
+            "info",
+            "event_observed",
+            "SIP source observed",
+            ip=ip,
+            kind=kind,
+            count=1,
+            min_count=cfg.sip_event_min_count,
+            action="wait" if cfg.sip_event_min_count > 1 else "check",
+        )
         return cfg.sip_event_min_count <= 1
 
     count = int(row[1]) + 1
     conn.execute("UPDATE events SET last_seen = ?, count = ? WHERE ip = ? AND kind = ?", (now, count, ip, kind))
     conn.commit()
-    log(f"observed {kind} from {ip}: count={count}/{cfg.sip_event_min_count}")
+    audit(
+        "info",
+        "event_observed",
+        "SIP source observed",
+        ip=ip,
+        kind=kind,
+        count=count,
+        min_count=cfg.sip_event_min_count,
+        action="check" if count >= cfg.sip_event_min_count else "wait",
+    )
     return count >= cfg.sip_event_min_count
 
 
@@ -413,11 +528,21 @@ def reputation_check(ip: str, cfg: Config) -> dict[str, Any] | None:
             best_clean = result
 
     if errors:
-        warn(f"reputation lookup errors for {ip}: {'; '.join(errors)}")
+        audit(
+            "warning",
+            "api_error",
+            "reputation lookup failed",
+            ip=ip,
+            errors="; ".join(errors),
+        )
     if best_clean is not None:
         return best_clean
     if not saw_provider:
-        warn("no reputation API keys configured; set IPQS_API_KEY and/or ABUSEIPDB_API_KEY")
+        audit(
+            "warning",
+            "api_not_configured",
+            "no reputation API keys configured; set IPQS_API_KEY and/or ABUSEIPDB_API_KEY",
+        )
     return None
 
 
@@ -446,7 +571,7 @@ def persist_learned(path: Path, ip: str, reason: str, dry_run: bool) -> None:
 
 def run_command(command: list[str], dry_run: bool) -> None:
     if dry_run:
-        log("DRY_RUN: would run " + " ".join(shlex.quote(part) for part in command))
+        audit("info", "dry_run_command", "would run command", command=" ".join(shlex.quote(part) for part in command))
         return
     subprocess.run(command, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -456,7 +581,18 @@ def enforce(ip_obj: ipaddress._BaseAddress, decision: dict[str, Any], cfg: Confi
     set_name = cfg.block_ipv4_set if ip_obj.version == 4 else cfg.block_ipv6_set
     family = "ipv4" if ip_obj.version == 4 else "ipv6"
     reason = f"{decision['provider']}:{decision['reason']}"
-    log(f"blocking {ip}: {reason}")
+    audit(
+        "info",
+        "block_enforced",
+        "blocking source",
+        ip=ip,
+        family=family,
+        ipset=set_name,
+        provider=decision["provider"],
+        score=decision.get("score", 0),
+        reason=reason,
+        dry_run=int(cfg.dry_run),
+    )
     run_command(["ipset", "add", set_name, ip, "-exist"], cfg.dry_run)
     run_command(["conntrack", "-D", "-f", family, "-s", ip], cfg.dry_run)
     persist_learned(cfg.learned_list, ip, reason, cfg.dry_run)
@@ -471,20 +607,24 @@ def process_event(
 ) -> None:
     src_ip = event.get("src_ip")
     if not isinstance(src_ip, str):
+        log_ignored_event(cfg, event, "missing-src-ip")
         return
     try:
         ip_obj = ipaddress.ip_address(src_ip)
     except ValueError:
+        log_ignored_event(cfg, event, "invalid-src-ip")
         return
 
     if not ip_obj.is_global:
+        log_ignored_event(cfg, event, "source-not-global")
         return
     if is_allowed(ip_obj, allowlist):
-        log(f"skipping allowlisted source {src_ip}")
+        audit("info", "event_ignored", "skipping allowlisted source", ip=src_ip, reason="allowlist")
         return
 
     relevant, kind = is_relevant_event(event, cfg)
     if not relevant:
+        log_ignored_event(cfg, event, kind)
         return
 
     if is_learned_blocked(ip_obj, learned_blocklist):
@@ -494,7 +634,13 @@ def process_event(
             "score": 100,
             "decision": "block",
         }
-        log(f"local learned block for {src_ip}: no reputation API lookup")
+        audit(
+            "info",
+            "learned_block",
+            "local learned block; no reputation API lookup",
+            ip=src_ip,
+            action="block",
+        )
         enforce(ip_obj, decision, cfg)
         return
 
@@ -504,10 +650,29 @@ def process_event(
     cached = cached_decision(conn, src_ip)
     if cached is not None:
         if cached["decision"] == "block":
-            log(f"cached block for {src_ip}: {cached['provider']}:{cached['reason']}")
+            audit(
+                "info",
+                "cached_decision",
+                "cached block",
+                ip=src_ip,
+                decision="block",
+                provider=cached["provider"],
+                score=cached["score"],
+                reason=cached["reason"],
+            )
             enforce(ip_obj, cached, cfg)
         else:
-            log(f"cached clean for {src_ip}: {cached['provider']}:{cached['reason']}")
+            if cfg.log_clean_events:
+                audit(
+                    "info",
+                    "cached_decision",
+                    "cached clean",
+                    ip=src_ip,
+                    decision="clean",
+                    provider=cached["provider"],
+                    score=cached["score"],
+                    reason=cached["reason"],
+                )
         return
 
     decision = reputation_check(src_ip, cfg)
@@ -527,7 +692,17 @@ def process_event(
         )
         enforce(ip_obj, decision, cfg)
     else:
-        log(f"clean reputation for {src_ip}: {decision['provider']}:{decision['reason']}")
+        if cfg.log_clean_events:
+            audit(
+                "info",
+                "reputation_decision",
+                "clean reputation",
+                ip=src_ip,
+                decision="clean",
+                provider=decision["provider"],
+                score=decision["score"],
+                reason=decision["reason"],
+            )
         store_decision(
             conn,
             src_ip,
@@ -566,11 +741,21 @@ def main() -> int:
     signal.signal(signal.SIGINT, handle_signal)
 
     cfg = load_config()
+    global LOGGER
+    LOGGER = EventLogger(cfg.reputation_log_file, cfg.reputation_log_format)
     conn = init_db(cfg.state_db)
     allowlist = load_allowlist(cfg.allow_list)
     learned_blocklist = load_learned_blocklist(cfg.learned_list)
 
-    log(f"watching {cfg.eve_file}; dry_run={int(cfg.dry_run)}")
+    audit(
+        "info",
+        "worker_start",
+        "watching EVE file",
+        eve_file=str(cfg.eve_file),
+        dry_run=int(cfg.dry_run),
+        log_file=str(cfg.reputation_log_file) if cfg.reputation_log_file else "",
+        log_ignored_events=int(cfg.log_ignored_events),
+    )
 
     if args.once:
         if not cfg.eve_file.exists():

@@ -154,6 +154,8 @@ conntrack state and appends confirmed blocks to
 `/var/lib/geoipsets/blocklists/learned.list` so they survive refreshes.
 The worker checks `learned.list` before calling any reputation API, so repeat
 offenders are enforced locally without consuming API quota.
+Worker journal messages use clear `key=value` formatting, and each decision is
+also written as JSONL to `/var/lib/geoipsets/reputation/events.jsonl`.
 
 Configure local API keys in `/etc/geoipsets-reputation.env`:
 
@@ -161,6 +163,11 @@ Configure local API keys in `/etc/geoipsets-reputation.env`:
 IPQS_API_KEY=replace-with-ipqualityscore-key
 ABUSEIPDB_API_KEY=replace-with-abuseipdb-key
 ```
+
+For troubleshooting, set `LOG_IGNORED_EVENTS=1` in an override or in
+`/etc/geoipsets-reputation.env`. This shows why EVE records were ignored, such
+as non-SIP ports, private sources, unsupported SIP methods, or OPTIONS requests
+that are not numeric-extension probes.
 
 Then enable the worker:
 

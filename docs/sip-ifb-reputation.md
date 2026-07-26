@@ -113,6 +113,9 @@ to be applied separately after boot and after relevant network changes.
 
 Use `clsact` so only ingress filters are added to the WAN interface. This
 mirrors packets to `ifb-sip0`; it does not redirect or delay the original packet.
+With the default ingress mirror, the mirror interface sees inbound public SIP
+traffic only. It will not show replies sent by the firewall/SBC unless an
+additional egress mirror is installed.
 
 ```bash
 sudo tc qdisc add dev "${wan_if}" clsact 2>/dev/null || true
@@ -424,6 +427,38 @@ Enable the worker:
 systemctl enable --now geoipsets-reputation-worker.service
 journalctl -u geoipsets-reputation-worker.service -f
 ```
+
+The worker writes clean `key=value` journal lines and a JSONL collector file:
+
+```text
+/var/lib/geoipsets/reputation/events.jsonl
+```
+
+Useful live views:
+
+```bash
+journalctl -u geoipsets-reputation-worker.service -o cat -f
+tail -f /var/lib/geoipsets/reputation/events.jsonl | jq .
+```
+
+If Suricata EVE has SIP traffic but the worker appears quiet, temporarily log
+ignored events:
+
+```ini
+[Service]
+Environment=LOG_IGNORED_EVENTS=1
+```
+
+Then reload and restart:
+
+```bash
+systemctl daemon-reload
+systemctl restart geoipsets-reputation-worker.service
+```
+
+Ignored records include the reason, such as `port-not-sip`,
+`sip-options-not-numeric-extension`, `source-not-global`, or an unsupported SIP
+method. Turn `LOG_IGNORED_EVENTS` off after troubleshooting to avoid noisy logs.
 
 The packaged service joins the `suricata` supplementary group so it can read
 `/var/log/suricata/eve.json` while still running with a reduced capability set.
