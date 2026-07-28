@@ -325,9 +325,11 @@ The local rules also flag long numeric INVITE probes and sources that send many
 INVITEs in a short window. These catch call setup scans that walk destination
 numbers on SIP ports such as `5086`. High-confidence scanner patterns such as
 `TUFAN-Scanner`, SIP `file:///` URI probes, and SIP `../` path traversal probes
-including `%00/../` variants are also flagged as reputation signals. Some TUFAN
-traffic spoofs normal SIP phones in `User-Agent`, so local rules also match the
-`s=TUFAN Call` SDP marker.
+including `%00/../` variants are also flagged as reputation signals. TUFAN
+variants such as `TUFAN-Scanner` and `TUFAN-MEGA-*` are matched by User-Agent,
+and traffic that spoofs a normal phone is still caught by the `s=TUFAN Call`
+SDP marker. SQL-injection-style SIP header probes such as `tag=' OR 1=1 #`
+are also high-confidence reputation signals.
 
 Make sure Suricata's own `SIP_PORTS` variable includes every mirrored SIP port.
 The worker environment has its own `SIP_PORTS`, but Suricata rules only match

@@ -6,8 +6,8 @@
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP scanner user-agent"; content:"User-Agent|3a|"; nocase; pcre:"/User-Agent\s*:\s*(friendly-scanner|sipvicious|sipsak|sundayddr|iWar|sipcli|VaxSIPUserAgent|eyeBeam)/Hi"; classtype:attempted-recon; sid:9002001; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP scanner user-agent"; flow:stateless; content:"User-Agent|3a|"; nocase; pcre:"/User-Agent\s*:\s*(friendly-scanner|sipvicious|sipsak|sundayddr|iWar|sipcli|VaxSIPUserAgent|eyeBeam)/Hi"; classtype:attempted-recon; sid:9002002; rev:1;)
 
-alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN scanner user-agent"; content:"User-Agent|3a|"; nocase; content:"TUFAN-Scanner"; nocase; classtype:attempted-recon; sid:9002091; rev:1;)
-alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN scanner user-agent"; flow:stateless; content:"User-Agent|3a|"; nocase; content:"TUFAN-Scanner"; nocase; classtype:attempted-recon; sid:9002092; rev:1;)
+alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN scanner family user-agent"; content:"User-Agent|3a|"; nocase; content:"TUFAN"; nocase; classtype:attempted-recon; sid:9002091; rev:2;)
+alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN scanner family user-agent"; flow:stateless; content:"User-Agent|3a|"; nocase; content:"TUFAN"; nocase; classtype:attempted-recon; sid:9002092; rev:2;)
 
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN SDP call marker"; content:"INVITE sip:"; nocase; content:"s=TUFAN Call"; nocase; classtype:attempted-recon; sid:9002097; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP TUFAN SDP call marker"; flow:stateless; content:"INVITE sip:"; nocase; content:"s=TUFAN Call"; nocase; classtype:attempted-recon; sid:9002098; rev:1;)
@@ -17,6 +17,9 @@ alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP file URI
 
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP path traversal URI probe"; content:"sip|3a|"; nocase; content:"../"; pcre:"/sip:(%00\/)?(\.\.\/)+/i"; classtype:attempted-recon; sid:9002095; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP path traversal URI probe"; flow:stateless; content:"sip|3a|"; nocase; content:"../"; pcre:"/sip:(%00\/)?(\.\.\/)+/i"; classtype:attempted-recon; sid:9002096; rev:1;)
+
+alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP SQL injection header probe"; content:"INVITE sip:"; nocase; content:"="; pcre:"/(From|To|Contact|P-Asserted-Identity)\s*:\s*.*(%27|')\s*(or|and)\s+[0-9a-z_]+\s*=\s*[0-9a-z_]+/Hi"; classtype:attempted-recon; sid:9002099; rev:1;)
+alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP SQL injection header probe"; flow:stateless; content:"INVITE sip:"; nocase; content:"="; pcre:"/(From|To|Contact|P-Asserted-Identity)\s*:\s*.*(%27|')\s*(or|and)\s+[0-9a-z_]+\s*=\s*[0-9a-z_]+/Hi"; classtype:attempted-recon; sid:9002100; rev:1;)
 
 alert udp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP INVITE with private or CGNAT Contact"; content:"INVITE sip:"; nocase; content:"Contact|3a|"; nocase; pcre:"/Contact\s*:\s*.*@(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.64\.)/Hi"; classtype:attempted-recon; sid:9002011; rev:1;)
 alert tcp $EXTERNAL_NET any -> $HOME_NET $SIP_PORTS (msg:"GEOIPSETS SIP INVITE with private or CGNAT Contact"; flow:stateless; content:"INVITE sip:"; nocase; content:"Contact|3a|"; nocase; pcre:"/Contact\s*:\s*.*@(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.64\.)/Hi"; classtype:attempted-recon; sid:9002012; rev:1;)
