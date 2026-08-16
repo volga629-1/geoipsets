@@ -9,7 +9,7 @@ The spec currently packages this Git snapshot:
 ```text
 commit: fdc367fade27b946f7694423f61add42359e031b
 version: 2.4.0
-release: 0.34.20260506gitfdc367f
+release: 0.35.20260506gitfdc367f
 ```
 
 If you build from a different commit, update the `commit`, `shortcommit`, and
@@ -88,6 +88,9 @@ install -pm 0755 rpm/geoipsets-reputation-worker "${sources_dir}/geoipsets-reput
 install -pm 0644 rpm/geoipsets-reputation-worker.service "${sources_dir}/geoipsets-reputation-worker.service"
 install -pm 0644 rpm/geoipsets-local-sip.rules "${sources_dir}/geoipsets-local-sip.rules"
 install -pm 0755 rpm/geoipsets-provision-sip-suricata "${sources_dir}/geoipsets-provision-sip-suricata"
+install -pm 0640 rpm/geoipsets-suricata.env "${sources_dir}/geoipsets-suricata.env"
+install -pm 0644 rpm/update-geoipsets-suricata-rules.service "${sources_dir}/update-geoipsets-suricata-rules.service"
+install -pm 0644 rpm/update-geoipsets-suricata-rules.timer "${sources_dir}/update-geoipsets-suricata-rules.timer"
 ```
 
 Copy the spec into `~/rpmbuild/SPECS`:

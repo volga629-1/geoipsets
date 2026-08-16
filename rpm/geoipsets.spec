@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.34.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.35.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -26,6 +26,9 @@ Source13:       geoipsets-reputation-worker
 Source14:       geoipsets-reputation-worker.service
 Source15:       geoipsets-local-sip.rules
 Source16:       geoipsets-provision-sip-suricata
+Source17:       geoipsets-suricata.env
+Source18:       update-geoipsets-suricata-rules.service
+Source19:       update-geoipsets-suricata-rules.timer
 
 BuildArch:      noarch
 BuildRequires:  python3-devel
@@ -78,6 +81,9 @@ install -Dpm 0755 %{SOURCE13} %{buildroot}%{_libexecdir}/geoipsets/reputation-wo
 install -Dpm 0644 %{SOURCE14} %{buildroot}%{_unitdir}/geoipsets-reputation-worker.service
 install -Dpm 0644 %{SOURCE15} %{buildroot}%{_datadir}/geoipsets/suricata/local-sip.rules
 install -Dpm 0755 %{SOURCE16} %{buildroot}%{_sbindir}/geoipsets-provision-sip-suricata
+install -Dpm 0640 %{SOURCE17} %{buildroot}%{_sysconfdir}/geoipsets-suricata.env
+install -Dpm 0644 %{SOURCE18} %{buildroot}%{_unitdir}/update-geoipsets-suricata-rules.service
+install -Dpm 0644 %{SOURCE19} %{buildroot}%{_unitdir}/update-geoipsets-suricata-rules.timer
 install -dpm 0755 %{buildroot}%{_sysconfdir}/geoipsets.blocklist.d
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets
 install -dpm 0755 %{buildroot}%{_sharedstatedir}/geoipsets/blocklists
@@ -91,18 +97,18 @@ pushd python
 popd
 
 %post
-%systemd_post update-geoipsets.service update-geoipsets.timer geoipsets-reputation-worker.service
+%systemd_post update-geoipsets.service update-geoipsets.timer geoipsets-reputation-worker.service update-geoipsets-suricata-rules.service update-geoipsets-suricata-rules.timer
 %tmpfiles_create geoipsets.conf
 if [ -f %{_sysconfdir}/geoipsets.blocklist-feeds.conf.rpmnew ]; then
     echo ">>> [RPM] %{_sysconfdir}/geoipsets.blocklist-feeds.conf.rpmnew contains updated default abuse feeds; merge or replace the existing config to enable them."
 fi
 
 %preun
-%systemd_preun update-geoipsets.service update-geoipsets.timer geoipsets-reputation-worker.service
+%systemd_preun update-geoipsets.service update-geoipsets.timer geoipsets-reputation-worker.service update-geoipsets-suricata-rules.service update-geoipsets-suricata-rules.timer
 
 %postun
-%systemd_postun_with_restart update-geoipsets.service geoipsets-reputation-worker.service
-%systemd_postun update-geoipsets.timer
+%systemd_postun_with_restart update-geoipsets.service geoipsets-reputation-worker.service update-geoipsets-suricata-rules.service
+%systemd_postun update-geoipsets.timer update-geoipsets-suricata-rules.timer
 
 %files -f %{pyproject_files}
 %license LICENSE
@@ -112,6 +118,7 @@ fi
 %config(noreplace) %{_sysconfdir}/geoipsets.blocklist
 %config(noreplace) %{_sysconfdir}/geoipsets.blocklist-feeds.conf
 %config(noreplace) %attr(0640,root,root) %{_sysconfdir}/geoipsets-reputation.env
+%config(noreplace) %attr(0640,root,root) %{_sysconfdir}/geoipsets-suricata.env
 %dir %{_sysconfdir}/geoipsets.blocklist.d
 %{_bindir}/geoipsets
 %{_sbindir}/geoipsets-ifbctl
@@ -124,6 +131,8 @@ fi
 %{_unitdir}/update-geoipsets.service
 %{_unitdir}/update-geoipsets.timer
 %{_unitdir}/geoipsets-reputation-worker.service
+%{_unitdir}/update-geoipsets-suricata-rules.service
+%{_unitdir}/update-geoipsets-suricata-rules.timer
 %{_tmpfilesdir}/geoipsets.conf
 %dir %{_datadir}/geoipsets
 %dir %{_datadir}/geoipsets/suricata
@@ -134,6 +143,10 @@ fi
 %dir %{_sharedstatedir}/geoipsets/reputation
 
 %changelog
+* Sun Aug 16 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.35.20260506gitfdc367f
+- Add scheduled systemd timer for geoipsets Suricata SIP rule updates.
+- Also disable TLS SNI rules when Suricata TLS app-layer detection is disabled.
+
 * Sun Aug 16 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.34.20260506gitfdc367f
 - Use Python-compatible regex syntax for generated Suricata Update protocol disables.
 

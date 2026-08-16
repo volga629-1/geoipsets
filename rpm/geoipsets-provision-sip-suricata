@@ -170,6 +170,9 @@ write_auto_disable_conf() {
         echo "# that declare them as the rule protocol are disabled before -T."
         for protocol in "${disabled_protocols[@]}"; do
             printf 're:^(alert|drop|reject|pass)\\s+%s\\s+\n' "${protocol}"
+            if [[ "${protocol}" == "tls" ]]; then
+                printf 're:tls\\.sni\n'
+            fi
         done
     } >"${auto_disable_conf}"
     generated_auto_disable_conf=true

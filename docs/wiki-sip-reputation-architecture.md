@@ -225,6 +225,25 @@ source of truth. `RULES_DST` is available only as an override.
 `geoipsets-ifbctl` remains the only helper that owns dummy/IFB and `tc` mirror
 setup.
 
+Scheduled rule updates are handled by:
+
+```text
+update-geoipsets-suricata-rules.service
+update-geoipsets-suricata-rules.timer
+```
+
+Enable the timer after Suricata is configured:
+
+```bash
+systemctl enable --now update-geoipsets-suricata-rules.timer
+systemctl list-timers update-geoipsets-suricata-rules.timer
+```
+
+The timer runs daily and calls `geoipsets-provision-sip-suricata --reload`.
+Override `/etc/geoipsets-suricata.env` if scheduled runs should also restart
+the mirror, for example `GEOIPSETS_SURICATA_ARGS="--mirror --reload"` with
+`WAN_IF=ens3`.
+
 ## Blocklist Sources
 
 Manual local blocklist:

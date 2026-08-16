@@ -355,6 +355,18 @@ rule destination, so the Suricata Update local rule policy remains the source of
 truth. `RULES_DST` is available only as an override. `geoipsets-ifbctl` remains
 the owner of dummy/IFB interface and `tc` filter setup.
 
+To keep ET, DShield, and local SIP rules current, enable the packaged timer:
+
+```bash
+systemctl enable --now update-geoipsets-suricata-rules.timer
+systemctl list-timers update-geoipsets-suricata-rules.timer
+```
+
+The timer runs daily and calls `geoipsets-provision-sip-suricata --reload`.
+Tune `/etc/geoipsets-suricata.env` if scheduled runs should also restart the
+mirror, for example by setting `GEOIPSETS_SURICATA_ARGS="--mirror --reload"`
+and `WAN_IF=ens3`.
+
 If `tc -s filter show dev WAN ingress` shows mirrored packets but Suricata or
 `tcpdump` sees nothing, switch the helper to the dummy backend:
 

@@ -18,7 +18,7 @@ fork has no release tags. The spec therefore packages the current Git commit as
 a snapshot release:
 
 ```text
-2.4.0-0.33.20260506gitfdc367f
+2.4.0-0.35.20260506gitfdc367f
 ```
 
 When an upstream release tag exists, update `Source0`, remove the commit
@@ -41,6 +41,9 @@ snapshot globals, and switch `Release` to `1%{?dist}`.
 - `/usr/sbin/geoipsets-provision-sip-suricata`: installs local Suricata rules and optionally calls `geoipsets-ifbctl`
 - `/etc/geoipsets-reputation.env`: local reputation API and policy configuration
 - `/usr/lib/systemd/system/geoipsets-reputation-worker.service`: optional local reputation worker
+- `/etc/geoipsets-suricata.env`: scheduled Suricata rule update configuration
+- `/usr/lib/systemd/system/update-geoipsets-suricata-rules.service`: one-shot Suricata rule updater
+- `/usr/lib/systemd/system/update-geoipsets-suricata-rules.timer`: daily Suricata rule update timer
 - `/usr/share/geoipsets/suricata/local-sip.rules`: local SIP rules for reputation signals
 - `/usr/lib/tmpfiles.d/geoipsets.conf`: creates `/var/lib/geoipsets`
 - `/var/lib/geoipsets`: generated provider output tree
@@ -220,6 +223,7 @@ like:
 
 ```text
 re:^(alert|drop|reject|pass)\s+tls\s+
+re:tls\.sni
 re:^(alert|drop|reject|pass)\s+smtp\s+
 re:^(alert|drop|reject|pass)\s+ftp\s+
 ```
@@ -228,6 +232,28 @@ This keeps SIP, DShield, and geoipsets local rules active while rules for
 locally disabled app-layer protocols are filtered before the Suricata config
 test. Use `--no-auto-disable` if you want to manage those disable rules
 yourself.
+
+To update Suricata rules automatically, enable the packaged timer:
+
+```bash
+sudo systemctl enable --now update-geoipsets-suricata-rules.timer
+systemctl list-timers update-geoipsets-suricata-rules.timer
+```
+
+The timer runs daily with randomized delay and calls:
+
+```bash
+/usr/sbin/geoipsets-provision-sip-suricata --reload
+```
+
+Override behavior in `/etc/geoipsets-suricata.env`. For example, to restart the
+SIP mirror at the same time:
+
+```bash
+GEOIPSETS_SURICATA_ARGS="--mirror --reload"
+WAN_IF="ens18"
+SIP_PORTS="5060 5061 5084 5086 5087 5088"
+```
 
 ## Build locally
 
