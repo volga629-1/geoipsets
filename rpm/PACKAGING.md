@@ -18,7 +18,7 @@ fork has no release tags. The spec therefore packages the current Git commit as
 a snapshot release:
 
 ```text
-2.4.0-0.22.20260506gitfdc367f
+2.4.0-0.33.20260506gitfdc367f
 ```
 
 When an upstream release tag exists, update `Source0`, remove the commit
@@ -204,6 +204,20 @@ be installed. `RULES_DST` is only an override. The helper warns if Suricata's
 `suricata-update -c /etc/suricata/update.yaml`, and tests the Suricata config.
 With `--mirror`, it calls `geoipsets-ifbctl restart`; it does not implement
 mirror setup itself.
+
+If local Suricata disables app-layer protocols such as `tls`, `smtp`, or `ftp`,
+some broad ET groups can still emit rules that use those protocols and make
+`suricata -T` fail. During provisioning, the helper detects those disabled
+protocols in `suricata.yaml`, generates:
+
+```text
+/var/lib/suricata/rules/geoipsets-disabled-protocols.disable.conf
+```
+
+and passes it to `suricata-update --disable-conf`. This keeps SIP, DShield, and
+geoipsets local rules active while rules for locally disabled app-layer
+protocols are filtered before the Suricata config test. Use `--no-auto-disable`
+if you want to manage those disable rules yourself.
 
 ## Build locally
 
