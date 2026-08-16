@@ -214,10 +214,20 @@ protocols in `suricata.yaml`, generates:
 /var/lib/suricata/rules/geoipsets-disabled-protocols.disable.conf
 ```
 
-and passes it to `suricata-update --disable-conf`. This keeps SIP, DShield, and
-geoipsets local rules active while rules for locally disabled app-layer
-protocols are filtered before the Suricata config test. Use `--no-auto-disable`
-if you want to manage those disable rules yourself.
+and passes it to `suricata-update --disable-conf`. Suricata Update `re:` lines
+use Python-style regular expressions, so the generated protocol filters look
+like:
+
+```text
+re:^(alert|drop|reject|pass)\s+tls\s+
+re:^(alert|drop|reject|pass)\s+smtp\s+
+re:^(alert|drop|reject|pass)\s+ftp\s+
+```
+
+This keeps SIP, DShield, and geoipsets local rules active while rules for
+locally disabled app-layer protocols are filtered before the Suricata config
+test. Use `--no-auto-disable` if you want to manage those disable rules
+yourself.
 
 ## Build locally
 

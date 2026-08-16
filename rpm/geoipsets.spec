@@ -4,7 +4,7 @@
 
 Name:           geoipsets
 Version:        2.4.0
-Release:        0.33.%{snapdate}git%{shortcommit}%{?dist}
+Release:        0.34.%{snapdate}git%{shortcommit}%{?dist}
 Summary:        Build country-specific IP sets for ipset and nftables
 
 License:        GPL-3.0-only
@@ -134,6 +134,9 @@ fi
 %dir %{_sharedstatedir}/geoipsets/reputation
 
 %changelog
+* Sun Aug 16 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.34.20260506gitfdc367f
+- Use Python-compatible regex syntax for generated Suricata Update protocol disables.
+
 * Sun Aug 16 2026 Telbit dev <info@telbit.dev> - 2.4.0-0.33.20260506gitfdc367f
 - Auto-disable Suricata rules for locally disabled app-layer protocols during SIP provisioning.
 

@@ -169,7 +169,7 @@ write_auto_disable_conf() {
         echo "# Suricata has these app-layer protocols disabled locally, so rules"
         echo "# that declare them as the rule protocol are disabled before -T."
         for protocol in "${disabled_protocols[@]}"; do
-            printf 're:^(alert|drop|reject|pass)[[:space:]]+%s[[:space:]]\n' "${protocol}"
+            printf 're:^(alert|drop|reject|pass)\\s+%s\\s+\n' "${protocol}"
         done
     } >"${auto_disable_conf}"
     generated_auto_disable_conf=true
